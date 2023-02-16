@@ -1339,6 +1339,8 @@ e50(void)
 	case 0127:		/* query presence of passwords */
 		acc.r = acc.l = 0;
 		return E_SUCCESS;
+	case 0130:		/* read control words of a zone */
+		return E_SUCCESS;
 	case 0131: {		/* attach volume to handle */
 		unsigned        u;
 
@@ -1973,11 +1975,12 @@ term(void)
 		return E_SUCCESS;
 	}
 	LOAD(r, addr);
-	if ((r.l == 0xffffff) && (r.r == 0xffffff)) {
+	if ((r.l == 0xffffff) && (r.r == 0xffffff) ||
+	    (r.l == 0x040000) && (r.r == 0xffffff)) {	/* for POPLAN */
 		if (notty)
 			acc.r = acc.l = 0;
 		else {
-			acc.l = 0x004000;
+			acc.l = 0x004000;		/* terminal 12(8) */
 			acc.r = 0;
 		}
 		return E_SUCCESS;
