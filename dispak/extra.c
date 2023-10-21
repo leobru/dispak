@@ -16,7 +16,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdint.h>
-#include <ctype.h>
 #include "defs.h"
 #include "disk.h"
 #include "iobuf.h"
@@ -272,7 +271,7 @@ print_gost(ushort addr0, ushort addr1, uchar *line, int pos, int *need_newline)
 				putchar('\n');
 				pos = 0;
 			} else
-				while (c-- & 017) {
+				while (pos < 128 && c-- & 017) {
 					if (line[pos] == GOST_SPACE)
 						line[pos] = lastc;
 					++pos;
@@ -676,42 +675,27 @@ again:
 		need_newline = 1;
 		switch (format) {
 		case 0:	/* text in GOST encoding */
-		case 8:
 			if (trace_e64)
 				print_text_debug (addr0, addr1, 0, offset);
 			addr0 = print_gost(addr0, addr1, line, offset,
 				&need_newline);
 			break;
 		case 1:	/* CPU instruction */
-		case 5:
-		case 9:
-		case 13:
 			addr0 = print_command(addr0, addr1, line, offset,
 				width, repeat);
 			break;
 		case 2: /* octal number */
-		case 10:
 			addr0 = print_octal(addr0, addr1, line, offset,
 				digits, width, repeat);
 			break;
 		case 3: /* real number */
-		case 11:
 			addr0 = print_real(addr0, addr1, line, offset,
 				digits, width, repeat);
 			break;
 		case 4:	/* text in ITM encoding */
-		case 12:
 			if (trace_e64)
 				print_text_debug (addr0, addr1, 1, offset);
 			addr0 = print_itm(addr0, addr1, line, offset);
-			break;
-		case 6: /* hex number */
-		case 7:
-		case 14:
-		case 15:
-			//TODO
-			//addr0 = print_hex(addr0, addr1, line, offset,
-			//	digits, width, repeat);
 			break;
 		}
 		if (final & 8) {
@@ -1224,31 +1208,6 @@ e50_15(void)
 	return E_UNIMP;
 }
 
-
-
-int
-e50_76(void)
-{
-	int addr = acc.r & 077777;
-	static ptr tp;
-
-	tp.p_w = addr;
-	tp.p_b = 0;
-	int c;
-
-	while (tp.p_w != 0) {
-		c = getbyte(&tp);
-		c = toupper(c);
-
-		printf ("%c", (c > 037) ? c : '@');
-
-		if (c == 0 || c == 012)
-			break;
-	}
-	printf ("\n");
-	return (E_SUCCESS);
-}
-
 int
 e50(void)
 {
@@ -1284,11 +1243,6 @@ e50(void)
 	case 074:	/* OS Dubna specific */
 		/* Looks like setting up an address to jump on error. */
 		return E_SUCCESS;
-
-	case 076:	/* OS Dubna specific */
-		/* Term OUTPUT */
-		return e50_76();
-
 	case 0100:	/* get account id */
 		acc = user;
 		return E_SUCCESS;
@@ -1321,13 +1275,13 @@ e50(void)
 		 * in chunks of 040 blocks for disks
 		 */
 		disks[unit].offset =
-			(disks[unit].diskno < 2048 ? acc.r : acc.r << 5) & 07777;
+			(disk_size == 725 || disks[unit].diskno < 2048 ? acc.r : acc.r << 5) & 07777;
 		return E_SUCCESS;
 	}
 	case 0113: {	/* get current offset */
 		uint unit = (acc.r >> 12) & 077;
 		acc.l = disks[unit].offset;
-		if (disks[unit].diskno >= 2048)
+		if (disk_size != 725 && disks[unit].diskno >= 2048)
 			acc.l >>= 5;
 		acc.r = 0;
 		return E_SUCCESS;
@@ -1354,26 +1308,9 @@ e50(void)
 	case 0127:		/* query presence of passwords */
 		acc.r = acc.l = 0;
 		return E_SUCCESS;
-        case 0130: {            /* read control words of a zone; imitation */
-            ushort addr = ADDR(((acc.l >> 6) & 037) * 02000);
-                alureg_t t;
-                t.l = t.r = 0;
-                STORE(t, addr + 2);
-                STORE(t, addr + 3);
-                STORE(t, addr + 6);
-                STORE(t, addr + 7);
-                t.l = 01370707;
-#define BCDDISK(d)      (((d)/1000) << 12 | ((d)/100%10) << 8 | \
-			((d)/10%10) << 4  | (d)%10)                
-                t.r = BCDDISK(disks[(acc.r >> 12) &077].diskno) << 12;
-                STORE(t, addr + 1);
-                STORE(t, addr + 5);
-                t.r = 0;
-                t.l = ((acc.r & 07777)+4) << 13;
-                STORE(t, addr);
-                t.l = ((acc.r & 07777)+4) << 13 | (1 << 12);
-                STORE(t, addr+4);
-        }       return E_SUCCESS;
+	case 0130:
+		fprintf(stderr, "E50 %04o\n", reg[016]);
+		return E_SUCCESS;
 	case 0131: {		/* attach volume to handle */
 		unsigned        u;
 
@@ -1411,7 +1348,7 @@ e50(void)
 			acc.r = 077777;
 		else if (i >= 2048)
 			/* pretend that the disks are 29.5 Mb */
-			acc.r = 1;
+			acc.r = disk_size == 725 ? 0 : 1;
 		else
 			/* BESM-6 tape */
 			acc.r = 040;
@@ -1433,42 +1370,18 @@ e50(void)
 		return E_SUCCESS;
 	case 0202:	/* get error description */
 		{
-			uchar           *sp, *dp;
+			uchar           *sp;
 			unsigned        di;
 
 			if (acc.r > E_MAX)
 				acc.r = 0;
 			sp = (uchar*) _(errtxt[acc.r]);
-			dp = core[reg[015]].w_b;
 			for (di = 0; di < 18; ++di)
-				*dp++ = *sp ? utf8_to_gost(&sp) : GOST_SPACE;
+				core[reg[015]].w_b[di] = *sp ?
+					utf8_to_gost(&sp) : GOST_SPACE;
 		}
 		return E_SUCCESS;
-        case 01211: 	/* plotter output (64 words starting from the address on acc) */
-	       if (reg[3] == 071717) {
-		static FILE * plot = NULL;
-		int i;
-		ptr txt;
- 	        txt.p_w = ADDR(acc.r);
-	        txt.p_b = 0;
-		if (plot == NULL) {
-			plot = fopen("plot.dat", "w");
-			if (!plot) {
-				perror("Cannot open plot.dat\n");
-				exit(1);
-			}
-		}
-		for (i = 0; i < 64; ++i) {
-			unsigned long long v = getword(&txt);
-			int j;
-			for (j = 7; j >= 0; --j) {
-				int val = (v >> (j*6)) & 077;
-				fprintf(plot, "%02o ", val);
-			}
-			fputc('\n', plot);
-		}
-		fflush(plot);
-	} return E_SUCCESS;
+	case 01211:
 	case 01212:	/* discard print stream */
 		return E_SUCCESS;
 	case 07700:	/* set alarm */
@@ -1548,6 +1461,11 @@ e62(void)
 		e = ddio();
 		STORE(r, 1);
 		return e;
+        case 0131:	/* system volume information */
+		acc.l = 2;
+		acc.r = (5<<8)+3;
+		accex = acc;
+		return E_SUCCESS;
 	default:	/* set volume offset or close volume */
 		u = reg[016] >> 9;
 		if ((u >= 030) && (u < 070)) {
@@ -1683,13 +1601,12 @@ ddio(void)
 	uir = uicore[addr][1];
 	cwadj(&uil);
 	cwadj(&uir);
-	addr = (uil.i_addr & 03700) << 4;   // адрес листа
-	u = uir.i_opcode & 077;             // номер диска
+	addr = (uil.i_addr & 03700) << 4;
+	u = uir.i_opcode & 077;
 	if ((u < 030) || (u >= 070))
-		zone = uir.i_addr & 037;    // тракт барабана
+		zone = uir.i_addr & 037;
 	else
-		zone = uir.i_addr & 07777;  // зона диска
-
+		zone = uir.i_addr & 07777;
 	if (uil.i_opcode & 4) {         /* физобмен */
 		zone += (u - (phdrum & 077)) * 040;
 		u = phdrum >> 8;
@@ -1703,10 +1620,10 @@ ddio(void)
 	    }
 	}
 
-	if (uil.i_reg & 8) {                // секторный обмен
-               /* согласно ВЗУ и ХЛАМу, 36-й разряд означает, что номер "зоны"
-                * есть не номер тракта, а номер сектора (обмен по КУС).
-                */
+	if (uil.i_reg & 8) {
+       /* согласно ВЗУ и ХЛАМу, 36-й разряд означает, что номер "зоны"
+        * есть не номер тракта, а номер сектора (обмен по КУС).
+        */
                if (uil.i_addr & 04000) {
                  zone = uir.i_addr & 0177;
                  sector = zone & 3;
@@ -1731,26 +1648,32 @@ ddio(void)
 			r = disk_writei(disks[u].diskh,
 				(zone + disks[u].offset) & 0xfff,
                                         (char *)buf, cvbuf, NULL, DISK_MODE_QUIET);
+
 		}
-	} else if (uil.i_opcode & 010) {    // чтение целой зоны
+	} else if (uil.i_opcode & 010) {
 		char cwords[48];
 		int iomode = DISK_MODE_QUIET;
 		if (uil.i_addr & 04000 && disks[u].diskno >= 2048) {
 			/* листовой обмен с диском по КУС - физический номер зоны */
 			iomode = DISK_MODE_PHYS;
 		}
+                if (uil.i_opcode & 1 && disks[u].diskno < 2048) {
+                    // Double zones
+                    zone += zone + disks[u].offset + 4 + (0 != (uir.i_opcode & 0200));
+                }
 		r = disk_readi(disks[u].diskh,
 			(zone + disks[u].offset) & 0xfff,
                                (char *)(core + addr), (char *)convol + addr, cwords, iomode);
 		if (uil.i_opcode & 1 && disks[u].diskno < 2048) {
 			/* check words requested for tape */
-			put_check_words(u, zone, addr, 0 != (uir.i_opcode & 0200));
+			// put_check_words(u, zone, addr, 0 != (uir.i_opcode & 0200));
+			memcpy((char*)(core + 010), cwords, 48);
 		} else if (uil.i_addr & 04000 && disks[u].diskno >= 2048) {
 			/* copy disk check words to requested page */
 			/* what should happen to the zone data? */
 			memcpy((char*)(core + addr), cwords, 48);
 		}
-	} else {                            // запись целой зоны
+	} else {
             r = disk_writei(disks[u].diskh,
                             (zone + disks[u].offset) & 0xfff,
                             (char *)(core + addr), (char *)convol + addr, NULL, DISK_MODE_QUIET);
@@ -1803,7 +1726,8 @@ ttout(uchar flags, ushort a1, ushort a2)
 			case '\037': fputs("\033[H\033[J", stdout); break;	// clrscr
 			case '\014': fputs("\033[H", stdout); break;		// home
 			case '\031': fputs("\033[A", stdout); break;		// up
-			case '\032': fputs("\033[B", stdout); break;		// down
+//			case '\032': fputs("\033[B", stdout); break;		// down
+			case '\032': fputs("\013", stdout); break;		// down
 			case '\030': fputs("\033[C", stdout); break;		// right
 			case '\010': fputs("\033[D", stdout); break;		// left
 			default:
@@ -1828,26 +1752,27 @@ ttout(uchar flags, ushort a1, ushort a2)
 			break;
 		case 0141:
 		case 0142:
+		case 0143:
 			/* zero-width space */
-			usleep (100000);
+			usleep (10000);
 			break;
 		case 0146:
 		case 0170:
 			/* non-destructive backspace */
 			/* assuming ANSI compatibility */
-			fputs("\033[D", stdout);
+			fputs("\033[D", stdout); usleep(10000);
 			break;
 		case 0171:
 			/* move right - assuming ANSI compatibility */
-			fputs("\033[C", stdout);
+			fputs("\033[C", stdout); usleep(10000);
 			break;
 		case 0176:
 			/* move up - assuming ANSI compatibility */
-			fputs("\033[A", stdout);
+			fputs("\033[A", stdout); usleep(10000);
 			break;
 		case 0177:
 			/* move down - assuming ANSI compatibility */
-			fputs("\033[B", stdout);
+			fputs("\033[B", stdout); usleep(10000);
 			break;
 		case 0162:
 			/* erase */
@@ -1898,16 +1823,16 @@ ttin(uchar flags, ushort a1, ushort a2)
 	dp = core[a1].w_b;
 	sp = buf;
 	while (dp - core[a1].w_b < (a2 - a1 + 1) * 6) {
-                if (*sp == '\n') {
-                        /* End of line. */
-                        PUTB(flags & 1 ? 0 : GOST_EOF);
-                        break;
-                }
-                if (flags & 1) {
-                        /* Raw input. */
-                        PUTB (utf8_to_koi7(&sp));
-                } else
-                        PUTB (utf8_to_gost (&sp));
+		if (*sp == '\n') {
+			/* End of line. */
+			PUTB(flags & 1 ? 0 : GOST_EOF);
+			break;
+		}
+		if (flags & 1) {
+			/* Raw input. */
+			PUTB (utf8_to_koi7(&sp));
+		} else
+			PUTB (utf8_to_gost (&sp));
 	}
 	while ((dp - core[a1].w_b) % 6)
 		PUTB(0);
@@ -2015,7 +1940,7 @@ int punch(ushort a1, ushort a2)
     }
     return E_SUCCESS;
 }
-
+// Imitating terminal 10
 int
 term(void)
 {
@@ -2023,22 +1948,21 @@ term(void)
 	alureg_t        r;
 	uinstr_t        uil, uir;
 	int             err;
-
+	const int num = 013;
 	reg[016] = 0;   /* Function key code    */
 	if (addr == 0) {
 		if (notty)
 			acc.r = acc.l = 0;
 		else
-			acc.r = acc.l = 0x004000;
+			acc.r = acc.l = 1 << (24-num);
 		return E_SUCCESS;
 	}
 	LOAD(r, addr);
-	if ((r.l == 0xffffff) && (r.r == 0xffffff) ||
-	    (r.l == 0x040000) && (r.r == 0xffffff)) {	/* for POPLAN */
+	if ((r.l == 0xffffff) && (r.r == 0xffffff)) {
 		if (notty)
 			acc.r = acc.l = 0;
 		else {
-			acc.l = 0x004000;		/* terminal 12(8) */
+			acc.l = 1 << (24-num);
 			acc.r = 0;
 		}
 		return E_SUCCESS;
@@ -2051,6 +1975,8 @@ term(void)
 		cwadj(&uir);
 		switch (uil.i_opcode & 0360) {
 		case 020:       /* i/o */
+			if ((uir.i_opcode & 077) != num)
+				fprintf(stderr, "Bad termio, term=%02o\n", uir.i_opcode & 077);
 			err = (uil.i_opcode & 010 ? ttin : ttout)
 				(uil.i_opcode,
 					ADDR(reg[uil.i_reg] + uil.i_addr),
@@ -2061,9 +1987,11 @@ term(void)
 		case 0120:      /* status/release */
 oporos:
 			acc.l = 010000002;
-			acc.r = 012;
+			acc.r = num;
 			return E_SUCCESS;
 		case 0220:
+			if ((uir.i_opcode & 077) != num)
+				fprintf(stderr, "Bad termio, term=%02o\n", uir.i_opcode & 077);
 			ttout(uil.i_opcode,
 					ADDR(reg[uil.i_reg] + uil.i_addr),
 					ADDR(reg[uir.i_reg] + uir.i_addr));
@@ -2101,6 +2029,10 @@ physaddr(void)
 	case 6:
 	case 7:
 		LOAD(acc, addr | 0100000);
+		break;
+	case IPZ + 050:			/* current RAM */
+		acc.l = 037 << 16;
+		acc.r = 0;
 		break;
 	case IPZ + 076:			/* ??? */
 		acc.l = 0;
@@ -2299,7 +2231,7 @@ nextw(void)
 static ushort   diagaddr;
 
 static void
-diag(const char *s)
+diag(char *s)
 {
 	uchar    *cp, *dp;
 
@@ -2316,28 +2248,6 @@ diag(const char *s)
 		fputs(s, stderr);
 }
 
-static char *extptr;
-
-static unsigned
-extget(void)
-{
-	uchar   c;
-rpt:
-	c = *extptr++;
-	switch (c) {
-	case GOST_CARRIAGE_RETURN:
-	case 0341:
-		c = GOST_NEWLINE;
-		break;
-	case 0143:
-		goto rpt;
-	case 0342:
-		c = GOST_LEFT_QUOTATION;
-		break;
-	}
-	return c;
-}
-
 static void
 exform(void)
 {
@@ -2349,6 +2259,12 @@ exform(void)
 	txt.p_b = 0;
 
 	do {
+		if (txt.p_b == 0) {
+			putchar('\n');
+			w = getword(&txt);
+			printf("%016llo ", w);
+			--txt.p_w;
+		}
 		c = getbyte(&txt);
 		gost_putc(c, stdout);
 	} while(c != GOST_TSE);
@@ -2357,34 +2273,7 @@ exform(void)
 	txt.p_b = 0;
 	w = getword(&txt);
 	diagaddr = 0;
-        if ((acc.l & 077700000) == 077200000) {
-            // loading from a drum or a disk
-            uint64_t myacc = ((uint64_t)acc.l << 24) | acc.r;
-            int u = (myacc >> 33) & 077;
-            int zone = (myacc >> 21) & 07777;
-            int nzon = (myacc >> 15) & 077;
-            int startw = reg[015];
-            int curzone = 0;
-            char *buf = malloc(nzon * 6144);
-	    diagaddr = ADDR(w);
-            do {
-                r = disk_readi(disks[u].diskh,
-                               (zone + disks[u].offset + curzone) & 0xfff,
-                               (char *)buf + curzone * 6144, NULL, NULL, DISK_MODE_QUIET);
-                if (r != DISK_IO_OK) {
-                    acc.r = 0100077777;
-                    acc.l = 0;
-                    return;
-                }
-            } while (++curzone < nzon);
-	    extptr = buf + startw*6;
-            if (diagaddr) {
-                r = vsinput(extget, diag, 1);
-            } else {
-                r = vsinput(extget, diag, 0);
-            }
-            free(buf);
-	} else if ((w & 0xffffff000000ull) == TKH000) {
+	if ((w & 0xffffff000000ull) == TKH000) {
 		diagaddr = ADDR(w);
 		r = vsinput(uget, diag, 1);
 	} else {
