@@ -311,7 +311,7 @@ elfun(int fun)
 	return E_SUCCESS;
 }
 
-inline void mult64to128(uint64_t u, uint64_t v, uint64_t* h, uint64_t* l)
+static inline void mult64to128(uint64_t u, uint64_t v, uint64_t* h, uint64_t* l)
 {
     uint64_t u1 = (u & 0xffffffff);
     uint64_t v1 = (v & 0xffffffff);
