@@ -77,7 +77,7 @@ static int host_row_for(int row)
 
 static int min_host_rows(void)
 {
-	return screen_top + 1 + VT_ROWS * VT_SPACING + 4;
+	return screen_top + 1 + VT_ROWS * VT_SPACING + 5;
 }
 
 static int min_host_cols(void)
@@ -182,6 +182,7 @@ static void draw_buttons(void)
 	for (i = 0; i < (int) (sizeof(buttons) / sizeof(buttons[0])); ++i) {
 		int attr = A_NORMAL;
 		int width = (int) strlen(buttons[i].label1);
+		char fkey[4];
 
 		if (buttons[i].label2 && (int) strlen(buttons[i].label2) > width)
 			width = (int) strlen(buttons[i].label2);
@@ -196,6 +197,8 @@ static void draw_buttons(void)
 			mvprintw(button_row + 1, x, "[%-*s]", width, buttons[i].label2);
 			mvchgat(button_row + 1, x, buttons[i].x1 - buttons[i].x0 + 1, attr, 0, NULL);
 		}
+		snprintf(fkey, sizeof(fkey), "F%d", i + 1);
+		mvprintw(button_row + 2, x + (width + 2 - (int) strlen(fkey)) / 2, "%s", fkey);
 		x = buttons[i].x1 + 3;
 	}
 }
@@ -414,18 +417,6 @@ static int retract_online_input(void)
 	return 1;
 }
 
-static int button_at(int x, int y)
-{
-	int i;
-
-	if (y != button_row && y != button_row + 1)
-		return -1;
-	for (i = 0; i < (int) (sizeof(buttons) / sizeof(buttons[0])); ++i)
-		if (x >= buttons[i].x0 && x <= buttons[i].x1)
-			return i;
-	return -1;
-}
-
 static void handle_button(int idx)
 {
 	switch (idx) {
@@ -465,36 +456,38 @@ static void handle_button(int idx)
 	}
 }
 
-static void handle_mouse(void)
-{
-	MEVENT ev;
-	int row;
-
-	if (getmouse(&ev) != OK)
-		return;
-	if (!(ev.bstate & BUTTON1_CLICKED))
-		return;
-	if (ev.y == button_row) {
-		int idx = button_at(ev.x, ev.y);
-		if (idx >= 0)
-			handle_button(idx);
-		return;
-	}
-	for (row = 0; row < VT_ROWS; ++row) {
-		int y = host_row_for(row);
-		if (ev.y == y && ev.x >= screen_left + 1 && ev.x < screen_left + 1 + VT_COLS) {
-			cursor_row = row;
-			cursor_col = ev.x - (screen_left + 1);
-			return;
-		}
-	}
-}
-
 static void handle_key_code(int ch)
 {
 	switch (ch) {
-	case KEY_MOUSE:
-		handle_mouse();
+	case KEY_F(1):
+		handle_button(0);
+		return;
+	case KEY_F(2):
+		handle_button(1);
+		return;
+	case KEY_F(3):
+		handle_button(2);
+		return;
+	case KEY_F(4):
+		handle_button(3);
+		return;
+	case KEY_F(5):
+		handle_button(4);
+		return;
+	case KEY_F(6):
+		handle_button(5);
+		return;
+	case KEY_F(7):
+		handle_button(6);
+		return;
+	case KEY_F(8):
+		handle_button(7);
+		return;
+	case KEY_F(9):
+		handle_button(8);
+		return;
+	case KEY_F(10):
+		handle_button(9);
 		return;
 	case KEY_LEFT:
 		if (retract_online_input())
@@ -528,16 +521,6 @@ static void handle_key_code(int ch)
 		return;
 	case KEY_IC:
 		insert_char_at_cursor(GOST_SPACE, 0, CTRL_NONE);
-		return;
-	case KEY_F(2):
-		offline_mode = !offline_mode;
-		return;
-	case KEY_F(3):
-		ctrl_blink = !ctrl_blink;
-		return;
-	case KEY_F(4):
-		if (pending_input)
-			(void) extract_and_store();
 		return;
 	}
 }
@@ -605,7 +588,6 @@ vt340_curses_init(void)
 	keypad(stdscr, TRUE);
 	meta(stdscr, TRUE);
 	nonl();
-	mousemask(BUTTON1_CLICKED, NULL);
 	curs_set(1);
 	for (row = 0; row < VT_ROWS; ++row)
 		clear_line(row);
