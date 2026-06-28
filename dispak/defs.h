@@ -359,6 +359,8 @@ EXTERN char		*pout_file;	/* e64 output file name */
 EXTERN uchar            xnative;        /* native xcodes */
 EXTERN uchar            enative;        /* native elem. funcs */
 EXTERN uchar		bootstrap;	/* run without disk 2099 */
+EXTERN uchar		vt340_curses;	/* use curses VT340 console */
+EXTERN uint		vt340_curses_baud; /* paced VT340 output speed */
 EXTERN ushort           lasterr;
 EXTERN ushort           intercept;
 EXTERN ushort           ninter;
@@ -417,6 +419,11 @@ void where (void);
 int usyscall(void);
 int emu_call (void);
 void terminate (void);
+void console_init (void);
+void console_shutdown (void);
+int console_is_active (void);
+int console_ttout (uchar flags, ushort a1, ushort a2);
+int console_ttin (uchar flags, ushort a1, ushort a2);
 int e50 (void);
 int e51 (void);
 int e53 (void);
@@ -424,6 +431,13 @@ int e60 (void);
 int e61 (void);
 int e62 (void);
 int e63 (void);
+
+/* vt340_curses.c */
+int vt340_curses_init (void);
+void vt340_curses_shutdown (void);
+int vt340_curses_is_active (void);
+int vt340_curses_ttout (uchar flags, ushort a1, ushort a2);
+int vt340_curses_ttin (uchar flags, ushort a1, ushort a2);
 
 /* arith.c */
 int add (void);

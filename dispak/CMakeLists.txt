@@ -51,6 +51,7 @@ add_executable(dispak
     arith.c
     input.c
     extra.c
+    vt340_curses.c
     disk.c
     errtxt.c
     vsinput.c
@@ -59,7 +60,7 @@ add_executable(dispak
     getopt.c
     "${CMAKE_CURRENT_BINARY_DIR}/debug.c"
 )
-target_link_libraries(dispak PUBLIC m)
+target_link_libraries(dispak PUBLIC m ncursesw)
 target_compile_options(dispak PRIVATE
     -Wall -g
     -DHAVE_STRING_H=${HAVE_STRING_H}

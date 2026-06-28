@@ -100,6 +100,7 @@ void            stat_out(void);
 static void	drum_dump(int drum_no, char *filename);
 
 enum {
+	OPT_VERSION,
 	OPT_CYRILLIC,
 	OPT_OUTPUT_RAW,
 	OPT_DECODE_OUTPUT,
@@ -110,6 +111,7 @@ enum {
 	OPT_PATH,
 	OPT_INPUT_ENCODING,
 	OPT_NO_INSN_CHECK,
+	OPT_VT340_CURSES,
 	OPT_725,
 	OPT_COVERAGE,
 	OPT_DRUM_DUMP,
@@ -119,7 +121,7 @@ enum {
 static struct option longopts[] = {
 	/* option	     has arg		integer code */
 	{ "help",		0,	0,	'h'		},
-	{ "version",		0,	0,	'V'		},
+	{ "version",		0,	0,	OPT_VERSION	},
 	{ "output-latin",	0,	0,	'l'		},
 	{ "output-cyrillic",	0,	0,	OPT_CYRILLIC	},
 	{ "break",		0,	0,	'b'		},
@@ -141,6 +143,7 @@ static struct option longopts[] = {
 	{ "path",		1,	0,	OPT_PATH	},
 	{ "input-encoding",	1,	0,	OPT_INPUT_ENCODING },
 	{ "no-insn-check",	0,	0,	OPT_NO_INSN_CHECK },
+	{ "vt340-curses",	2,	0,	'V'		},
 	{ "725",		0,	0,	OPT_725         },
 	{ "coverage",		0,	0,	OPT_COVERAGE    },
 	{ "drum-dump",		1,	0,	OPT_DRUM_DUMP   },
@@ -160,6 +163,7 @@ usage ()
 	fprintf (stderr, _("  %s [options] <input-buf-number>\n"), PACKAGE_NAME);
 	fprintf (stderr, _("  %s [options] --decode-output <raw-file>\n"), PACKAGE_NAME);
 	fprintf (stderr, _("Options:\n"));
+	fprintf (stderr, _("  --version              show version information\n"));
 	fprintf (stderr, _("  -x, --native           use native extracode E64\n"));
 	fprintf (stderr, _("  -e, --elfun            use native elementary functions\n"));
 	fprintf (stderr, _("  -b, --break            break on first cmd\n"));
@@ -180,6 +184,9 @@ usage ()
 	fprintf (stderr, _("  --input-encoding=code  set encoding for input files: utf8 koi8 cp1251 cp866\n"));
 	fprintf (stderr, _("  --bootstrap            used to generate contents of the system disk\n"));
 	fprintf (stderr, _("  --no-insn-check        all words but at addr 0 are treated as insns\n"));
+	fprintf (stderr, _("  -V[baud], --vt340-curses[=baud]\n"));
+	fprintf (stderr, _("                         use curses-based Videoton-340 console for TELE tasks\n"));
+	fprintf (stderr, _("                         optionally pace output at baud/10 chars per second\n"));
 	fprintf (stderr, _("  --725                  emulate 7.25 MB disk geometry\n"));
 	fprintf (stderr, _("  --coverage             print PC coverage map at exit\n"));
 	fprintf (stderr, _("  --drum-dump=file       output drum 27 to file\n"));
@@ -227,6 +234,7 @@ main(int argc, char **argv)
 	double          sec;
 	void            *nh;
 	char 		*endptr;
+	char		*baud_end;
 	int		decode_output = 0;
 
 	/* Set locale and message catalogs. */
@@ -235,14 +243,14 @@ main(int argc, char **argv)
 	(void)textdomain (PACKAGE_NAME);
 
 	for (;;) {
-		i = getopt_long (argc, argv, "hVlbvtspqxeo:c:", longopts, 0);
+		i = getopt_long (argc, argv, "hV::lbvtspqxeo:c:", longopts, 0);
 		if (i < 0)
 			break;
 		switch (i) {
 		case 'h':
 			usage ();
 			break;
-		case 'V':
+		case OPT_VERSION:
 			printf ("Version: %s\n", PACKAGE_VERSION);
 			return 0;
 		case 'l':		/* use Latin letters for output */
@@ -312,6 +320,16 @@ main(int argc, char **argv)
 		case OPT_NO_INSN_CHECK:
 			no_insn_check = 1;
 			break;
+		case 'V':
+			vt340_curses = 1;
+			if (optarg) {
+				vt340_curses_baud = strtoul(optarg, &baud_end, 10);
+				if (!*optarg || *baud_end || !vt340_curses_baud) {
+					fprintf(stderr, _("%s: invalid baud rate '%s'\n"), PACKAGE_NAME, optarg);
+					exit(1);
+				}
+			}
+			break;
 		case OPT_725:
 			disk_emulate_725 = 1;
 			break;
@@ -379,6 +397,8 @@ main(int argc, char **argv)
 		/* TELE task. */
 		pout_disable = ! pout_enable;
 	}
+	console_init();
+	atexit(console_shutdown);
 
 	if (!bootstrap && !sv_load()) {
 		fprintf(stderr, _("Error loading supervisor.\n"));
@@ -427,6 +447,7 @@ main(int argc, char **argv)
 void
 catchsig (int sig)
 {
+	console_shutdown();
 	printf (_("\nInterrupt\n"));
 	breakflg = 1;
 	if (signal (SIGTERM, SIG_IGN) != SIG_IGN)

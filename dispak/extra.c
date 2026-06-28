@@ -116,6 +116,7 @@ terminate(void)
 {
 	unsigned        u;
 
+	console_shutdown();
 	for (u = 030; u < 070; ++u)
 		if (disks[u].diskh)
 			disk_close(disks[u].diskh);
@@ -1880,8 +1881,8 @@ ddio(void)
 #define E71BUFSZ (324*6)
 #define PUTB(c) *dp++ = (c)
 
-int
-ttout(uchar flags, ushort a1, ushort a2)
+static int
+stdio_ttout(uchar flags, ushort a1, ushort a2)
 {
 	uchar   *sp, *start;
 	start = sp = core[a1].w_b;
@@ -1927,9 +1928,9 @@ ttout(uchar flags, ushort a1, ushort a2)
 			/* zero-width space */
 			usleep (100000);
 			break;
-                case 0143:
-                        /* ignored */
-                        break;
+		case 0143:
+			/* ignored */
+			break;
 		case 0146:
 		case 0170:
 			/* non-destructive backspace */
@@ -1966,9 +1967,8 @@ ttout(uchar flags, ushort a1, ushort a2)
 		default:
 			if (*sp <= 0134)
 				gost_putc(*sp, stdout);
-			else {
+			else
 				printf("[%03o]", *sp);
-			}
 			break;
 		}
 		fflush(stdout);
@@ -1983,12 +1983,18 @@ done:
 }
 
 int
-ttin(uchar flags, ushort a1, ushort a2)
+ttout(uchar flags, ushort a1, ushort a2)
+{
+	return stdio_ttout(flags, a1, a2);
+}
+
+static int
+stdio_ttin(uchar flags, ushort a1, ushort a2)
 {
 	uchar   buf[0324 * 6], *sp, *dp;
 
 	if (flags & 4)          /* non-standard prompt */
-		ttout(flags, a1, a2);
+		stdio_ttout(flags, a1, a2);
 	else
 		fputs("-\r", stdout);
 	fflush(stdout);
@@ -2012,6 +2018,47 @@ ttin(uchar flags, ushort a1, ushort a2)
 		PUTB(0);
 	eraise(4);
 	return E_SUCCESS;
+}
+
+int
+ttin(uchar flags, ushort a1, ushort a2)
+{
+	return stdio_ttin(flags, a1, a2);
+}
+
+void
+console_init(void)
+{
+	if (vt340_curses)
+		(void) vt340_curses_init();
+}
+
+void
+console_shutdown(void)
+{
+	vt340_curses_shutdown();
+}
+
+int
+console_is_active(void)
+{
+	return vt340_curses_is_active();
+}
+
+int
+console_ttout(uchar flags, ushort a1, ushort a2)
+{
+	if (console_is_active())
+		return vt340_curses_ttout(flags, a1, a2);
+	return stdio_ttout(flags, a1, a2);
+}
+
+int
+console_ttin(uchar flags, ushort a1, ushort a2)
+{
+	if (console_is_active())
+		return vt340_curses_ttin(flags, a1, a2);
+	return stdio_ttin(flags, a1, a2);
 }
 
 void punch_braille(FILE * fd, unsigned char * sp, int left) {
@@ -2153,7 +2200,7 @@ term(void)
 		cwadj(&uir);
 		switch (uil.i_opcode & 0360) {
 		case 020:       /* i/o */
-			err = (uil.i_opcode & 010 ? ttin : ttout)
+			err = (uil.i_opcode & 010 ? console_ttin : console_ttout)
 				(uil.i_opcode,
 					ADDR(reg[uil.i_reg] + uil.i_addr),
 					ADDR(reg[uir.i_reg] + uir.i_addr));
@@ -2166,7 +2213,7 @@ oporos:
 			acc.r = 012;
 			return E_SUCCESS;
 		case 0220:
-			ttout(uil.i_opcode,
+			console_ttout(uil.i_opcode,
 					ADDR(reg[uil.i_reg] + uil.i_addr),
 					ADDR(reg[uir.i_reg] + uir.i_addr));
 			return E_SUCCESS;
