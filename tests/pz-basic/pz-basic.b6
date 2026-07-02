@@ -1,0 +1,47 @@
+шифр 419999 зс5^
+лен 41(2048)^
+eeв1а3
+*name pz basic
+*no list
+*assembler
+ program: ,name,
+	  ,xta , badc
+	  ,*53 , 25b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,*53 , 27b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,*53 , 30b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,*53 , 36b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,*53 , 16b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,*53 , 20b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,*50 , 207b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,call, stop*
+ badc:	  ,oct , 7777 7777
+ res:	  ,log , 0
+ inf64:	  ,    , res
+	  ,    , res
+	 2,    , 20b
+	 8,    ,
+	  ,end ,
+*execute
+*end file
+``````
+еконец

@@ -1,0 +1,80 @@
+шифр 419999 зс5^
+лен 41(2048)^
+eeв1а3
+*name pz subtasks
+*no list
+*assembler
+ program: ,name,
+	  ,xta , mask
+	  ,*53 , 12b
+	 15,vtm, cwrd
+	  ,ita , 15
+	  ,*50 , 7701b
+ wexp:	  ,*53 , 17b
+	  ,*53 , 16b
+	  ,aax , b11
+	  ,uza , wexp
+	  ,xta , pzc
+	  ,*53 , 30b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta , pzc
+	  ,*50 , 206b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta , pzc
+	  ,*53 , 36b
+	  ,atx , res
+	  ,*64 , inf64
+	 13,vtm, evw
+	  ,xta , pzc
+	  ,*53 , 32b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta , pzc
+	  ,*53 , 36b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta , pzc
+	  ,*53 , 31b
+	  ,atx , res
+	  ,*64 , inf64
+ wend:	  ,*53 , 17b
+	  ,xta , pzc
+	  ,*50 , 206b
+	  ,aox ,
+	  ,u1a , wend
+	  ,xta , pzc
+	  ,*53 , 30b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,call, stop*
+ mask:	  ,log , 2001
+ b11:	  ,log , 2000 0000 0000
+ pzc:	  ,oct , 2031 44
+ evw:	  ,log , 2
+ res:	  ,log , 0
+ inf64:	  ,    , res
+	  ,    , res
+	 2,    , 20b
+	 8,    ,
+ cwrd:	  ,oct , 1442 5055
+ deck:	  ,gost, 30hшифр 419900 зс5'115'лен 41(2048)'115'
+	  ,gost, 6hеев1а3
+	  ,gost, 18h'341'*name pz'341'*no list
+	  ,gost, 12h'341'*assembler
+	  ,gost, 18h'341' program: ,name,
+	  ,gost, 18h'341'  ,xta , mast
+	  ,gost, 18h'341'  ,*53 , 46b
+	  ,gost, 18h'341'  ,call, stop*
+	  ,gost, 30h'341' mast:  ,oct , 2031 4631
+	  ,gost, 12h'341'  ,end ,
+	  ,gost, 12h'341'*execute
+	  ,gost, 12h'341'*end file '341'
+	  ,gost, 6h'342''342''342''342''342''342'
+	  ,gost, 6hеконец
+	  ,end ,
+*execute
+*end file
+``````
+еконец

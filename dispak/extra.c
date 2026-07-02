@@ -22,6 +22,7 @@
 #include "iobuf.h"
 #include "gost10859.h"
 #include "encoding.h"
+#include "tasks.h"
 
 #define SMALL_DISKS()	(getenv("BESM6_SMALL_DISKS") || disk_emulate_725)
 
@@ -789,6 +790,19 @@ restore_state() {
 	eenab = 1;
 }
 
+/*
+ * Notify the master task that its subtask has stopped after appealing
+ * to it (э53 27/46).  Which event bit real client software expects here
+ * is not spelled out in the documentation; "появилась ПЗ" is used until
+ * proven otherwise.
+ */
+static void
+pz_notify_master(task_slot_t *m)
+{
+	if (m->pid)
+		task_raise(m, EVENT_PZ_APPEARED);
+}
+
 int
 e53(void)
 {
@@ -814,6 +828,11 @@ e53(void)
 	case 015:
 		restore_state();
 		return E_SUCCESS;
+	case 016:		/* get event scale, clearing it */
+		acc.l = events & 0xffffff;
+		acc.r = (eenab ? 1 << 23 : 0) | (ehandler & 077777);
+		events = 0;
+		return E_SUCCESS;
 	case 017: {             /* wait for events      */
 		struct itimerval        itv = {{0, 0}, {0, 0}};
 
@@ -832,16 +851,334 @@ e53(void)
 			itv.it_value.tv_usec = 040 * 80000;
 			setitimer(ITIMER_REAL, &itv, NULL);
 		}
+		if (task_reg)
+			task_self()->inpause = 1;
 		pause();
+		if (task_reg)
+			task_self()->inpause = 0;
 		acc.r = 0;
 		return E_SUCCESS;
 	}
+	case 020:		/* get event mask */
+		acc.l = emask & 0xffffff;
+		acc.r = (eenab ? 1 << 23 : 0) | (ehandler & 077777);
+		return E_SUCCESS;
 	case 021:               /* clear or declare events      */
 		if (acc.l & 0x800000)   /* clear        */
 			events &= ~acc.r;
 		else
 			(void) eraise(acc.r & 0xffffff);
 		return E_SUCCESS;
+	case 024: {		/* get event mask of a subtask */
+		task_slot_t *pz = task_find_pz();
+		uint m, h;
+		int en;
+		acc.l = 0;
+		if (!pz) {
+			acc.r = 1;	/* нет ПЗ в решении */
+			return E_SUCCESS;
+		}
+		m = pz->emask_in & TASK_IN_VALID ? pz->emask_in : pz->emask;
+		h = pz->ehandler_in & TASK_IN_VALID ? pz->ehandler_in : pz->ehandler;
+		en = pz->eenab_in >= 0 ? pz->eenab_in : pz->eenab;
+		acc.l = m & 0xffffff;
+		acc.r = (en ? 0 : 1 << 23) | (1 << 15) | (h & 077777);
+		return E_SUCCESS;
+	}
+	case 025:		/* declare the master task */
+	case 046: {		/* declare the master task and appeal to it */
+		task_slot_t *self, *m;
+		uint sl = acc.l, sr = acc.r;
+		acc.l = 0;
+		if (sl == user.l && sr == user.r) {
+			acc.r = 2;	/* объявляет главной себя */
+			return E_SUCCESS;
+		}
+		m = task_by_shifr(sl, sr);
+		if (!m || m->master == task_chan) {
+			acc.r = 1;	/* нет задачи, либо это своя ПЗ */
+			return E_SUCCESS;
+		}
+		self = task_self();
+		if (self->master && self->master != task_channo(m)) {
+			task_slot_t *old = &task_reg->slot[self->master - 1];
+			if (old->pid)
+				task_raise(old, EVENT_PZ_APPEARED);
+		}
+		self->master = task_channo(m);
+		task_raise(m, EVENT_PZ_APPEARED);
+		acc.r = 0;
+		if (reg[016] == 025)
+			return E_SUCCESS;
+	}
+	/* fall through */
+	case 027: {		/* appeal to the master task */
+		task_slot_t *self;
+		if (!task_reg || !(self = task_self())->master) {
+			acc.l = 0;
+			acc.r = 1;	/* задача не является подчиненной */
+			return E_SUCCESS;
+		}
+		acc.l = acc.r = 0;
+		(void) eraise(EVENT_ACCIDENT);
+		pz_notify_master(&task_reg->slot[self->master - 1]);
+		return task_park(TC_APPEAL);
+	}
+	case 026: {		/* detach from the master task */
+		task_slot_t *self;
+		if (task_reg && (self = task_self())->master) {
+			task_slot_t *m = &task_reg->slot[self->master - 1];
+			self->master = 0;
+			if (m->pid)
+				task_raise(m, EVENT_PZ_APPEARED);
+		}
+		acc.l = acc.r = 0;
+		return E_SUCCESS;
+	}
+	case 030: {		/* stop a subtask */
+		task_slot_t *pz = task_find_pz();
+		acc.l = 0;
+		acc.r = pz && task_stop_pz(pz) == 0 ? 0 : 1;
+		return E_SUCCESS;
+	}
+	case 031: {		/* start a stopped subtask */
+		task_slot_t *pz = task_find_pz();
+		acc.l = 0;
+		if (!pz)
+			acc.r = 1;
+		else if (pz->state != TS_STOPPED)
+			acc.r = 4;	/* ПЗ не остановлена */
+		else {
+			task_wake(pz);
+			acc.r = 0;
+		}
+		return E_SUCCESS;
+	}
+	case 032: {		/* declare or clear events in a subtask */
+		task_slot_t *pz = task_find_pz();
+		alureg_t w;
+		acc.l = 0;
+		if (!pz) {
+			acc.r = 1;
+			return E_SUCCESS;
+		}
+		if (!reg[015]) {
+			acc.r = 4;	/* слово вне памяти задачи */
+			return E_SUCCESS;
+		}
+		LOAD(w, reg[015]);
+		if (w.l & 0x800000)
+			task_clear(pz, w.r);
+		else
+			task_raise(pz, w.r & ~EVENT_INTERCEPT);
+		acc.r = 0;
+		return E_SUCCESS;
+	}
+	case 033: {		/* end a subtask */
+		task_slot_t *pz = task_find_pz();
+		int pid, i;
+		acc.l = 0;
+		if (!pz) {
+			acc.r = 1;
+			return E_SUCCESS;
+		}
+		if (pz->state != TS_STOPPED) {
+			acc.r = 4;	/* ПЗ не остановлена */
+			return E_SUCCESS;
+		}
+		pid = pz->pid;
+		pz->state = TS_END_REQ;
+		task_kick(pz);
+		for (i = 0; i < 5000 && pz->pid == pid; ++i)
+			usleep(1000);
+		acc.r = 0;
+		return E_SUCCESS;
+	}
+	case 034: {		/* set event mask of a subtask */
+		task_slot_t *pz = task_find_pz();
+		alureg_t w;
+		acc.l = 0;
+		if (!pz) {
+			acc.r = 1;
+			return E_SUCCESS;
+		}
+		if (!reg[015]) {
+			acc.r = 4;
+			return E_SUCCESS;
+		}
+		LOAD(w, reg[015]);
+		pz->emask_in = TASK_IN_VALID | (w.r & 0xffffff);
+		task_kick(pz);
+		acc.r = 0;
+		return E_SUCCESS;
+	}
+	case 035: {		/* exchange memory pages with a subtask */
+		task_slot_t *pz = task_find_pz();
+		int was_stopped, i, j;
+		acc.l = 0;
+		if (!pz) {
+			acc.r = 1;
+			return E_SUCCESS;
+		}
+		if (!reg[015]) {
+			acc.r = 4;
+			return E_SUCCESS;
+		}
+		was_stopped = pz->state == TS_STOPPED;
+		if (!was_stopped && task_stop_pz(pz) != 0) {
+			acc.r = 1;
+			return E_SUCCESS;
+		}
+		for (i = 0; i < 4; ++i) {
+			alureg_t w;
+			uint64_t c;
+			LOAD(w, ADDR(reg[015] + i));
+			c = (uint64_t) w.l << 24 | w.r;
+			for (j = 0; j < 8; ++j) {
+				int fld = c >> (42 - 6*j) & 077;
+				int g = i*8 + 7 - j;	/* own page */
+				int p = fld & 037;	/* subtask page */
+				word_t tcore[CLICKSZ];
+				uchar tconv[CLICKSZ];
+				int k;
+				if (!(fld & 040))
+					continue;
+				memcpy(tcore, core + g*CLICKSZ, sizeof(tcore));
+				memcpy(core + g*CLICKSZ, pz->core + p*CLICKSZ, sizeof(tcore));
+				memcpy(pz->core + p*CLICKSZ, tcore, sizeof(tcore));
+				memcpy(tconv, convol + g*CLICKSZ, sizeof(tconv));
+				memcpy(convol + g*CLICKSZ, pz->convol + p*CLICKSZ, sizeof(tconv));
+				memcpy(pz->convol + p*CLICKSZ, tconv, sizeof(tconv));
+				for (k = g*CLICKSZ; k < (g + 1)*CLICKSZ; ++k)
+					cflags[k] &= ~C_UNPACKED;
+			}
+		}
+		task_raise(pz, EVENT_RESOURCE);
+		if (!was_stopped)
+			task_wake(pz);
+		acc.r = 0;
+		return E_SUCCESS;
+	}
+	case 036: {		/* get event scale of a subtask, clearing it */
+		task_slot_t *pz = task_find_pz();
+		uint ev;
+		int en;
+		if (!pz) {
+			acc.l = 0;
+			acc.r = 1;
+			return E_SUCCESS;
+		}
+		ev = __atomic_exchange_n(&pz->events_in, 0, __ATOMIC_SEQ_CST);
+		if (pz->state == TS_STOPPED)
+			ev |= __atomic_exchange_n(&pz->events, 0, __ATOMIC_SEQ_CST);
+		else {
+			ev |= pz->events;
+			__atomic_fetch_or(&pz->events_clr_in, ev, __ATOMIC_SEQ_CST);
+			task_kick(pz);
+		}
+		en = pz->eenab_in >= 0 ? pz->eenab_in : pz->eenab;
+		acc.l = ev & 0xffffff;
+		acc.r = (en ? 0 : 1 << 23) | (1 << 15);
+		return E_SUCCESS;
+	}
+	case 037: {		/* pass a dataset to/from a subtask */
+		task_slot_t *pz = task_find_pz();
+		int lun = reg[015] & 077;
+		int topz = !(reg[015] & 040000);	/* 15 р.: 1 - от ПЗ к гз */
+		int setrw = reg[015] & 010000;		/* 13 р. */
+		acc.l = acc.r = 0;
+		if (!pz) {
+			acc.r = 1;	/* 1 р.: нет ПЗ в решении */
+			return E_SUCCESS;
+		}
+		if (pz->state != TS_STOPPED) {
+			acc.r = 4;	/* 3 р.: ПЗ не остановлена */
+			return E_SUCCESS;
+		}
+		if (lun < 030 || lun >= 070) {
+			acc.l = 1 << 12;	/* 37 р.: неверный логический номер */
+			return E_SUCCESS;
+		}
+		if (topz) {
+			if (!disks[lun].diskno) {
+				acc.l = 1 << 22;	/* 47 р.: номер свободен */
+				return E_SUCCESS;
+			}
+			if (pz->disks[lun].diskno) {
+				acc.l = 1 << 20;	/* 45 р.: номер занят */
+				return E_SUCCESS;
+			}
+			pz->disks[lun].diskno = disks[lun].diskno;
+			pz->disks[lun].offset = disks[lun].offset;
+			pz->disks[lun].mode = setrw ? DISK_READ_WRITE : disks[lun].mode;
+			if (disks[lun].diskh) {
+				disk_close(disks[lun].diskh);
+				disks[lun].diskh = 0;
+			}
+			disks[lun].diskno = 0;
+			disks[lun].offset = 0;
+		} else {
+			if (!pz->disks[lun].diskno) {
+				acc.l = 1 << 22;
+				return E_SUCCESS;
+			}
+			if (disks[lun].diskno) {
+				acc.l = 1 << 20;
+				return E_SUCCESS;
+			}
+			disks[lun].diskno = pz->disks[lun].diskno;
+			disks[lun].offset = pz->disks[lun].offset;
+			disks[lun].mode = setrw ? DISK_READ_WRITE : pz->disks[lun].mode;
+			disks[lun].diskh = 0;
+			pz->disks[lun].diskno = 0;
+			pz->disks[lun].offset = 0;
+		}
+		task_raise(pz, EVENT_RESOURCE);
+		return E_SUCCESS;
+	}
+	case 040:		/* enable async processes in a subtask */
+	case 042: {		/* disable async processes in a subtask */
+		task_slot_t *pz = task_find_pz();
+		acc.l = 0;
+		if (!pz) {
+			acc.r = 1;
+			return E_SUCCESS;
+		}
+		pz->eenab_in = reg[016] == 040;
+		task_kick(pz);
+		acc.r = 0;
+		return E_SUCCESS;
+	}
+	case 043: {		/* set event decoder address in a subtask */
+		task_slot_t *pz = task_find_pz();
+		acc.l = 0;
+		if (!pz) {
+			acc.r = 1;
+			return E_SUCCESS;
+		}
+		if (!reg[015]) {
+			acc.r = 4;
+			return E_SUCCESS;
+		}
+		pz->ehandler_in = TASK_IN_VALID | ADDR(reg[015]);
+		task_kick(pz);
+		acc.r = 0;
+		return E_SUCCESS;
+	}
+	case 047: {		/* cancel pause or alarm in a subtask */
+		task_slot_t *pz = task_find_pz();
+		acc.l = 0;
+		if (!pz)
+			acc.r = 1;
+		else if (!pz->inpause)
+			acc.r = 2;	/* нет паузы или будильника */
+		else {
+			pz->cancel_pause = 1;
+			task_kick(pz);
+			acc.r = 0;
+		}
+		return E_SUCCESS;
+	}
 	case 000:
 		return elfun(EF_ARCTG);
 	default:
@@ -1425,6 +1762,16 @@ e50(void)
 	}
 	case 0135:	/* get phys. number of a console */
 		return E_SUCCESS;
+	case 0206: {	/* get program channel number by task code */
+		task_slot_t *t = task_by_shifr(acc.l, acc.r);
+		acc.l = 0;
+		acc.r = t ? task_channo(t) : 0;
+		return E_SUCCESS;
+	}
+	case 0207:	/* get program channel number of the master task */
+		acc.l = 0;
+		acc.r = task_reg ? task_self()->master : 0;
+		return E_SUCCESS;
 	case 0136:	/* undocumented */
 		return E_SUCCESS;
 	case 0137:	/* undocumented */
@@ -1516,9 +1863,13 @@ e50(void)
 			setitimer(ITIMER_REAL, &itv, NULL);
 			return E_SUCCESS;
 		}
-		if (!ehandler || (acc.l != 0xffffff))
+		if (!ehandler || (acc.l != 0xffffff)) {
+			if (task_reg)
+				task_self()->inpause = 1;
 			usleep((acc.r & 0x7fff) * 80000);
-		else {
+			if (task_reg)
+				task_self()->inpause = 0;
+		} else {
 			struct itimerval        itv = {{0, 0}, {0, 0}};
 			itv.it_value.tv_usec = (acc.r & 0x7fff) * 80000;
 			setitimer(ITIMER_REAL, &itv, NULL);
@@ -2566,8 +2917,11 @@ exform(void)
 	if (r < 0) {
 		acc.r = -r;
 		acc.l = 0;
-	} else
+	} else {
 		reg[016] = r;
+		if (task_reg && r > 0)
+			task_spawn(r);
+	}
 }
 
 int

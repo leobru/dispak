@@ -160,8 +160,13 @@ static wchar_t cell_wchar(const cell_t *cell)
 	}
 	if (cell->raw) {
 		unsigned char raw = cell->value & 0x7f;
+		unsigned short u = koi7_to_unicode[raw];
 
-		return (raw < 32 || raw == 127) ? L'.' : (wchar_t) raw;
+		if (raw < 32 || raw == 127)
+			return L'.';
+		if (u)
+			return (wchar_t) u;
+		return (wchar_t) raw;
 	}
 	if (cell->value == 0136)
 		ch = '?';

@@ -17,6 +17,7 @@
 #include "defs.h"
 #include "optab.h"
 #include "encoding.h"
+#include "tasks.h"
 
 long aumodes[] = {
 	0,
@@ -112,7 +113,7 @@ ulong   run() {
 	ushort         addr;
 	ushort                  cf;
 	uinstr_t                ui;
-	reg_t                   nextpc, pcm;
+	reg_t                   nextpc, pcm = pc | supmode;
 	ushort                  cnt, r, err = 0;
 	int                     i;
 	ulong                   icount = 0;
@@ -120,6 +121,9 @@ ulong   run() {
 	uint64_t		tsc = rdtsc();
 
 FOREVER
+
+	if (task_reg && task_poll() == E_TERM)
+		STOP;
 
 	if (goahead && !right) {
 		goahead = 0;
@@ -554,6 +558,8 @@ mtj:
 			goto errchk;
 		case 053:
 			err = e53();
+			if (err == E_TERM)
+				STOP;
 			goto errchk;
 		case 054:
 			err = elfun(EF_ARCSIN);

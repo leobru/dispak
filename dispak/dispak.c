@@ -71,6 +71,7 @@
 #include "defs.h"
 #include "optab.h"
 #include "disk.h"
+#include "tasks.h"
 #include "encoding.h"
 #include "gost10859.h"
 
@@ -115,6 +116,7 @@ enum {
 	OPT_725,
 	OPT_COVERAGE,
 	OPT_DRUM_DUMP,
+	OPT_SUBTASKS,
 };
 
 /* Table of options. */
@@ -147,6 +149,7 @@ static struct option longopts[] = {
 	{ "725",		0,	0,	OPT_725         },
 	{ "coverage",		0,	0,	OPT_COVERAGE    },
 	{ "drum-dump",		1,	0,	OPT_DRUM_DUMP   },
+	{ "subtasks",		0,	0,	OPT_SUBTASKS	},
 	{ 0,			0,	0,	0		},
 };
 
@@ -190,6 +193,8 @@ usage ()
 	fprintf (stderr, _("  --725                  emulate 7.25 MB disk geometry\n"));
 	fprintf (stderr, _("  --coverage             print PC coverage map at exit\n"));
 	fprintf (stderr, _("  --drum-dump=file       output drum 27 to file\n"));
+	fprintf (stderr, _("  --subtasks             run tasks formed by extracode 050 7701\n"));
+	fprintf (stderr, _("                         as subordinate-task processes\n"));
 
 	exit (1);
 }
@@ -236,6 +241,9 @@ main(int argc, char **argv)
 	char 		*endptr;
 	char		*baud_end;
 	int		decode_output = 0;
+	int		subtasks = 0;
+
+	task_argv0 = argv[0];
 
 	/* Set locale and message catalogs. */
 	setlocale (LC_ALL, "");
@@ -339,6 +347,9 @@ main(int argc, char **argv)
 		case OPT_DRUM_DUMP:
 			drum_dump_filename = optarg;
 			break;
+		case OPT_SUBTASKS:
+			subtasks = 1;
+			break;
 		}
 	}
 	if (bootstrap) {
@@ -390,6 +401,8 @@ main(int argc, char **argv)
 		fprintf(stderr, "%03o\n", i);
 		exit(1);
 	}
+	if (task_init(subtasks) < 0)
+		exit(1);
 	if (notty) {
 		/* Batch task. */
 		pout_enable = ! pout_disable;
@@ -426,6 +439,7 @@ main(int argc, char **argv)
 	gettimeofday(&start_time, NULL);
 	icnt = run();
 	gettimeofday(&stop_time, NULL);
+	task_cleanup();
 	sec = TIMEDIFF(start_time, stop_time) - excuse;
 	if (!sec)
 		sec = 0.000001;

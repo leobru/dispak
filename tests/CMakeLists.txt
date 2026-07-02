@@ -24,6 +24,8 @@ add_test(NAME madlen COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTO
 add_test(NAME monitor80 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/monitor80)
 add_test(NAME pascal-monitor COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pascal-monitor)
 add_test(NAME pascal-prettyprint COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pascal-prettyprint)
+add_test(NAME pz-basic COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pz-basic)
+add_test(NAME pz-subtasks COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pz-subtasks)
 add_test(NAME pprog01 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pprog01)
 add_test(NAME pprog02 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pprog02)
 add_test(NAME pprog03 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pprog03)
