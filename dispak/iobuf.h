@@ -5,6 +5,10 @@
 #define MAXVOL  12
 #define U(c)    ((unsigned) c & 0xff)
 
+#define VOL_READ_ONLY   0
+#define VOL_READ_WRITE  1
+#define VOL_CHUNK       2
+
 /* ibword tags  */
 #define W_IADDR         1
 #define W_DATA          2
@@ -27,7 +31,7 @@ struct passport {
 	struct vol      {
 		uchar                   wr;
 		uchar                   u;
-		ushort                  volno;
+		uint                    volno;
 		ushort			offset;
 	}                       vol[MAXVOL];
 	uint                    arr_end;        /* offset to input array 1 end */

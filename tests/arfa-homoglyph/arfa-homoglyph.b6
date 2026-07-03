@@ -1,0 +1,64 @@
+шифр 419999 зс5^
+лен 41(2048)^
+eeв1а3
+*name arfa homoglyph
+*no list
+*assembler
+ program: ,name,
+	  ,xta ,
+	  ,u1a , p00
+ p00:	  ,xta , kluch
+	  ,*63 , darfa
+	  ,xta , len1
+	  ,u1a , p01
+ p01:	  ,xta , kluch
+	  ,*63 , carfa
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta , scal
+	  ,u1a , p02
+ p02:	  ,xta , kluch
+	  ,*63 , oarfa
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta , patt
+	  ,atx , 4000b
+	  ,*70 , cw1
+	  ,xta ,
+	  ,atx , 4000b
+	  ,*70 , cw2
+	  ,xta , 4000b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,u1a , p03
+ p03:	  ,xta , kluch
+	  ,*63 , darfa
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,call, stop*
+ kluch:	  ,gost, 6hключар
+ len1:	  ,log , 1
+ scal:	  ,oct , 2000
+ patt:	  ,oct , 7531 2464 0000 7777
+ cw1:	  ,oct , 0000 0200 0031 0000
+ cw2:	  ,oct , 0010 0200 0031 0000
+ carfa:	  ,oct , 0100 0000 0000 0010
+	  ,gost, 6hARFA;
+ oarfa:	  ,oct , 1200 0000 0000 0010
+	  ,gost, 6hARFA;
+ darfa:	  ,oct , 0200 0000 0000 0010
+	  ,gost, 6hARFA;
+ res:	  ,log , 0
+ inf64:	  ,    , res
+	  ,    , res
+	 2,    , 20b
+	 8,    ,
+	  ,end ,
+*execute
+*end file
+``````
+еконец

@@ -30,7 +30,6 @@ extern int gost_latin;          /* dispak -l: render ambiguous names in Latin */
 
 #define ARFA_MAGIC      0x41524641      /* "ARFA" */
 #define ARFA_MAXREC     128
-#define ARFA_PATHLEN    96              /* canonical GOST path, 0377-ended */
 #define ARFA_MAXACL     6
 #define ARFA_MAXZONES   01000           /* макс. длина области, зон */
 #define ARFA_MAXLUNS    12
@@ -84,6 +83,45 @@ static uint     conf_r[ARFA_MAXHOLD], conf_w[ARFA_MAXHOLD];
 static uint     my_excl[ARFA_MAXHOLD];
 static uint     my_shared[ARFA_MAXHOLD];
 
+const char *
+arfa_msg(uint n)
+{
+	static const char *msg[] = {
+		"ВЫПОЛНЕНО",
+		"ТАКОГО ИМЕНИ НЕТ",
+		"НЕВЕРНОЕ ИМЯ ОБЛ.",
+		"ТОМ УЖЕ В АРХИВЕ",
+		"НЕТ ВИРТ.УСТР-ВА",
+		"ОШИБКА В ШИФРЕ",
+		"ОБЛАСТЬ УЖЕ ЕСТЬ",
+		"НЕТ БЮДЖЕТА",
+		"ОБЛАСТЬ ЗАНЯТА",
+		"НЕТ МЕСТА В КАТ.",
+		"НЕ УСТАНОВЛЕН ТОМ",
+		"ВИРТ.УСТР-В > 12",
+		"ОШИБКА В ДАТЕ",
+		"ДЛИНА ОБЛ.> РАЗР.",
+		"ОШ.В НОМЕРЕ ТОМА",
+		"БЮДЖЕТ ЗАНЯТ",
+		"НАРУШЕНА ИЕРАРХИЯ",
+		"НЕТ РЕСУРСОВ",
+		"НЕТ МЕСТА НА ТОМЕ",
+		"НЕТ ПОЛНОМОЧИЙ",
+		"ОБЛАСТЬ / КАТАЛОГ",
+		"ЗАПРЕЩ.ГРУППА",
+		"ИДЕТ ВТАЛКИВАНИЕ",
+		"ОШИБКА ВИДА",
+		"БЮДЖЕТ АРХИВА",
+		"ПОДТВЕРДИ ПАРОЛЬ",
+		"ВИРТ.НОМЕР ЗАНЯТ",
+		"ЛИСТ В ОБМЕНЕ",
+	};
+
+	if (n >= sizeof(msg) / sizeof(msg[0]) || !msg[n])
+		return NULL;
+	return msg[n];
+}
+
 /*
  * The catalog index file, shared by all dispak processes:
  * every operation is a read-modify-write under an exclusive lock.
@@ -119,8 +157,10 @@ cat_lock(void)
 	if (n < (int) sizeof(cat) || cat.magic != ARFA_MAGIC) {
 		memset(&cat, 0, sizeof(cat));
 		cat.magic = ARFA_MAGIC;
-		cat.idseq = 1;
+		cat.idseq = ARFA_ID_BASE;
 	}
+	if (cat.idseq < ARFA_ID_BASE)
+		cat.idseq = ARFA_ID_BASE;
 	return 0;
 }
 
@@ -172,6 +212,19 @@ find_by_name(const uchar *gname)
 	for (i = 0; i < ARFA_MAXREC; ++i)
 		if (cat.rec[i].used &&
 		    !memcmp(cat.rec[i].name, gname, ARFA_PATHLEN))
+			return &cat.rec[i];
+	return NULL;
+}
+
+static arfa_rec_t *
+find_by_name_owner(const uchar *gname, uint owner)
+{
+	int     i;
+
+	for (i = 0; i < ARFA_MAXREC; ++i)
+		if (cat.rec[i].used &&
+		    !memcmp(cat.rec[i].name, gname, ARFA_PATHLEN) &&
+		    shifr_match(owner, cat.rec[i].owner))
 			return &cat.rec[i];
 	return NULL;
 }
@@ -365,14 +418,81 @@ list_del(uint *list, uint id)
 static int
 rights_of(arfa_rec_t *r)
 {
+	uint    who = me();
 	int     i;
 
-	if (shifr_match(r->owner, me()))
+	if (shifr_match(r->owner, who))
 		return 3;
 	for (i = 0; i < ARFA_MAXACL; ++i)
-		if (r->acl[i] && shifr_match(r->acl[i], me()))
+		if (r->acl[i] && shifr_match(r->acl[i], who))
 			return (r->acl_rights >> (2 * (i + 1))) & 3;
 	return r->acl_rights & 3;
+}
+
+int
+arfa_lookup_id(const uchar *gname, uint user, uint owner, uint *id)
+{
+	arfa_rec_t *r;
+	uint owners[4];
+	int i, nowners;
+	int rc = ARFA_OK;
+
+	if (cat_lock() < 0)
+		return ARFA_NO_VOLUME;
+	if (owner) {
+		owners[0] = owner;
+		nowners = 1;
+	} else {
+		owners[0] = user;
+		owners[1] = (user & 0xffff00) | 016 << 4 | 016;
+		owners[2] = (user & 0xff0000) | 0x0099;
+		owners[3] = 0x999999;
+		nowners = 4;
+	}
+	r = NULL;
+	for (i = 0; i < nowners && !r; ++i)
+		r = find_by_name_owner(gname, owners[i]);
+	if (!r)
+		rc = ARFA_NO_NAME;
+	else if (r->is_catalog)
+		rc = ARFA_IS_CATALOG;
+	else
+		*id = r->id;
+	cat_unlock(0);
+	return rc;
+}
+
+int
+arfa_attach_lun(int lun, uint id, int write, ushort offset)
+{
+	char path[ARFA_PATH_MAX];
+	arfa_rec_t *r;
+	void *h;
+	int rc = ARFA_OK;
+
+	if (cat_lock() < 0)
+		return ARFA_NO_VOLUME;
+	r = find_by_id(id);
+	if (!r)
+		rc = ARFA_NO_NAME;
+	else if (r->is_catalog)
+		rc = ARFA_IS_CATALOG;
+	else if (write && rights_of(r) < 2)
+		rc = ARFA_NO_RIGHTS;
+	else if (!arfa_resolve(arfa_root, r->name, 0, gost_latin, path))
+		rc = ARFA_NO_VOLUME;
+	else if (!(h = disk_open_path(path, write ? DISK_READ_WRITE : DISK_READ_ONLY)))
+		rc = ARFA_NO_VOLUME;
+	else {
+		disks[lun].diskh = h;
+		disks[lun].diskno = 0;
+		disks[lun].offset = offset;
+		disks[lun].mode = write ? DISK_READ_WRITE : DISK_READ_ONLY;
+		lun_id[lun] = r->id;
+		++r->orders;
+	}
+	cat_unlock(rc == ARFA_OK);
+	return rc;
 }
 
 /* Has this область subregions? */
@@ -905,11 +1025,13 @@ arfa(void)
 			int     j, sl = 0;
 			if (!s->used)
 				continue;
-			if (code == 011)
-				continue;       /* общих областей нет */
 			for (j = 0; s->name[j] != 0377; ++j)
 				if (s->name[j] == GOST_DOT)
 					++sl;
+			if (code == 011) {
+				if (sl || !shifr_match(s->owner, 0x999999))
+					continue;
+			} else
 			if (plen < 0) {
 				/* области верхнего уровня данного хозяина */
 				if (sl || !shifr_match(s->owner, me()))

@@ -76,6 +76,22 @@
 #include "encoding.h"
 #include "gost10859.h"
 
+#include <termios.h>
+
+static void
+stdin_enable_iutf8(void) {
+#ifdef IUTF8
+    struct termios tio;
+
+    if (!isatty(STDIN_FILENO))
+        return;
+    if (tcgetattr(STDIN_FILENO, &tio) == -1)
+        return;
+    tio.c_iflag |= IUTF8;
+    (void)tcsetattr(STDIN_FILENO, TCSANOW, &tio);
+#endif
+}
+
 static struct   {
 	int     dsk;
 	ushort  zone;
@@ -254,6 +270,7 @@ main(int argc, char **argv)
 	setlocale (LC_ALL, "");
 	(void)bindtextdomain (PACKAGE_NAME, "/usr/local/share/locale");
 	(void)textdomain (PACKAGE_NAME);
+        stdin_enable_iutf8();
 
 	for (;;) {
 		i = getopt_long (argc, argv, "hV::lbvtspqxeo:c:", longopts, 0);

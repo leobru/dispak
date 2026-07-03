@@ -22,37 +22,49 @@
 
 #include "defs.h"
 
+#define ARFA_PATHLEN    96      /* canonical GOST path, 0377-ended */
+#define ARFA_ID_BASE    10000   /* distinguishes region ids from disk numbers */
+
 /*
- * Answer codes on М16.  The documentation (extracodes.md §5.3.156-180)
- * names them only mnemonically; the numbering below is sequential in
- * the order of first appearance.
+ * Answer codes on М16, numbered in the order of arfamsg.txt.
  */
-#define ARFA_OK             0
-#define ARFA_BAD_NAME       1   /* неверное имя обл. */
-#define ARFA_BAD_SHIFR      2   /* ошибка в шифре */
-#define ARFA_NO_NAME        3   /* такого имени нет */
-#define ARFA_EXISTS         4   /* область уже есть */
-#define ARFA_TOO_LONG       5   /* длина обл.> разр. */
-#define ARFA_BAD_KIND       6   /* ошибка вида */
+#define ARFA_OK             0   /* выполнено */
+#define ARFA_NO_NAME        1   /* такого имени нет */
+#define ARFA_BAD_NAME       2   /* неверное имя обл. */
+#define ARFA_VOL_ARCHIVED   3   /* том уже в архиве */
+#define ARFA_NO_VIRT_DEV    4   /* нет вирт.устр-ва */
+#define ARFA_BAD_SHIFR      5   /* ошибка в шифре */
+#define ARFA_EXISTS         6   /* область уже есть */
 #define ARFA_NO_BUDGET      7   /* нет бюджета */
-#define ARFA_BUDGET_BUSY    8   /* бюджет занят */
-#define ARFA_BAD_GROUP      9   /* запрещ.группа */
-#define ARFA_NO_RES         10  /* нет ресурсов */
-#define ARFA_NO_SPACE_VOL   11  /* нет места на томе */
-#define ARFA_NO_SPACE_CAT   12  /* нет места в кат. */
-#define ARFA_NO_RIGHTS      13  /* нет полномочий */
-#define ARFA_BUSY           14  /* область занята */
-#define ARFA_MAINTENANCE    15  /* служебные работы */
-#define ARFA_IS_CATALOG     16  /* область / каталог */
-#define ARFA_NO_PASSWORD    17  /* не задан пароль */
-#define ARFA_LUN_BUSY       18  /* вирт.номер занят */
-#define ARFA_NO_VOLUME      19  /* не установлен том */
-#define ARFA_MANY_LUNS      20  /* вирт.устр-в > 12 */
+#define ARFA_BUSY           8   /* область занята */
+#define ARFA_NO_SPACE_CAT   9   /* нет места в кат. */
+#define ARFA_NO_VOLUME      10  /* не установлен том */
+#define ARFA_MANY_LUNS      11  /* вирт.устр-в > 12 */
+#define ARFA_BAD_DATE       12  /* ошибка в дате */
+#define ARFA_TOO_LONG       13  /* длина обл.> разр. */
+#define ARFA_BAD_VOLNO      14  /* ош.в номере тома */
+#define ARFA_BUDGET_BUSY    15  /* бюджет занят */
+#define ARFA_BAD_HIERARCHY  16  /* нарушена иерархия */
+#define ARFA_NO_RES         17  /* нет ресурсов */
+#define ARFA_NO_SPACE_VOL   18  /* нет места на томе */
+#define ARFA_NO_RIGHTS      19  /* нет полномочий */
+#define ARFA_IS_CATALOG     20  /* область / каталог */
+#define ARFA_BAD_GROUP      21  /* запрещ.группа */
+#define ARFA_MAINTENANCE    22  /* идет вталкивание */
+#define ARFA_BAD_KIND       23  /* ошибка вида */
+#define ARFA_ARCHIVE_BUDGET 24  /* бюджет архива */
+#define ARFA_NO_PASSWORD    25  /* подтверди пароль */
+#define ARFA_LUN_BUSY       26  /* вирт.номер занят */
+#define ARFA_LIST_EXCHANGE  27  /* лист в обмене */
+#define ARFA_MAX_MSG        27
 
 extern char *arfa_dir;          /* --arfa-dir override, NULL = ~/.besm6/arfa */
 
 int  arfa(void);                /* ЭК 063 КЛЮЧАР dispatch */
+const char *arfa_msg(uint n);   /* КЛЮЧАР answer text by answer code */
 void arfa_lun_close(int lun);   /* release an область-attached LUN */
 void arfa_cleanup(void);        /* drop захваты held by this process */
+int  arfa_lookup_id(const uchar *gname, uint user, uint owner, uint *id);
+int  arfa_attach_lun(int lun, uint id, int write, ushort offset);
 
 #endif  /* arfa_h */

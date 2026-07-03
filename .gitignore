@@ -5,3 +5,5 @@ build
 pz*.out
 pz*.raw
 arfa-work/
+stuff/
+__pycache__/

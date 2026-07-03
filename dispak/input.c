@@ -16,6 +16,7 @@
 #include "defs.h"
 #include "disk.h"
 #include "iobuf.h"
+#include "arfa.h"
 
 static FILE             *ibuf;
 static char             ibufname[MAXPATHLEN];
@@ -60,11 +61,18 @@ ibr:
 	notty = !psp.tele;
 	for (i = 0; i < psp.nvol; ++i) {
 		ushort  u = psp.vol[i].u;
-		ushort  no = psp.vol[i].volno;
-		ushort  flg = psp.vol[i].wr ? DISK_READ_WRITE : DISK_READ_ONLY;
+		uint    no = psp.vol[i].volno;
+		ushort  flg = (psp.vol[i].wr & VOL_READ_WRITE) ?
+		    DISK_READ_WRITE : DISK_READ_ONLY;
 
+		if (no >= ARFA_ID_BASE) {
+			if (arfa_attach_lun(u, no, psp.vol[i].wr & VOL_READ_WRITE,
+			    psp.vol[i].offset) != ARFA_OK)
+				return -1;
+			continue;
+		}
 		disks[u].mode = flg;
-		if (psp.vol[i].wr == 2) {       /* a "chunk" */
+		if (psp.vol[i].wr == VOL_CHUNK) {
 			disks[u].diskh = drumh;
 			disks[u].offset = no;
 			continue;

@@ -20,6 +20,7 @@
 #include "iobuf.h"
 #include "gost10859.h"
 #include "encoding.h"
+#include "arfa.h"
 
 static unsigned                 lineno, pncline, pncsym;
 static unsigned                 level, array;
@@ -137,6 +138,59 @@ get_octal (uchar *cp)
 	while (*cp <= GOST_7)
 		val = val << 3 | *cp++;
 	return val;
+}
+
+static int
+arfa_passport_name(uchar **cpp, uchar *gname, uint *owner)
+{
+	uchar *cp = *cpp;
+	int n = 0;
+
+	*owner = 0;
+	memset(gname, 0377, ARFA_PATHLEN);
+	while (*cp != GOST_RIGHT_PARENTHESIS && *cp != GOST_MINUS &&
+	    *cp != GOST_SLASH && *cp != GOST_OVERLINE) {
+		if (n >= ARFA_PATHLEN - 1)
+			return -1;
+		gname[n++] = *cp++;
+	}
+	if (!n)
+		return -1;
+	gname[n] = 0377;
+	if (*cp == GOST_SLASH) {
+		int i;
+
+		++cp;
+		for (i = 0; i < 6; ++i) {
+			if (*cp > GOST_9)
+				return -1;
+			*owner = (*owner << 4) | *cp++;
+		}
+	}
+	*cpp = cp;
+	return 0;
+}
+
+static int
+arfa_passport_suffixes(uchar **cpp, ushort *offset, uchar *wr)
+{
+	uchar *cp = *cpp;
+
+	while (*cp == GOST_MINUS) {
+		++cp;
+		if ((cp[0] == GOST_ZE && cp[1] == GOST_PE) ||
+		    (cp[0] == GOST_W && cp[1] == GOST_R)) {
+			*wr |= VOL_READ_WRITE;
+			cp += 2;
+		} else if (*cp <= GOST_7) {
+			*offset = get_octal(cp);
+			while (*cp <= GOST_7)
+				++cp;
+		} else
+			return -1;
+	}
+	*cpp = cp;
+	return 0;
 }
 
 static int
@@ -331,8 +385,31 @@ mpar:				inperr(_("НЕТ ПАРАМ"));
 					goto fs;
 				psp.vol[psp.nvol].u = u;
 				psp.vol[psp.nvol].offset = 0;
+				psp.vol[psp.nvol].wr = VOL_READ_ONLY;
 				u = 0;
 				cp += 3;
+				if (*cp > GOST_9) {
+					uchar gname[ARFA_PATHLEN];
+					uint id, owner;
+
+					psp.vol[psp.nvol].wr = VOL_READ_ONLY;
+					if (arfa_passport_name(&cp, gname, &owner) ||
+					    arfa_passport_suffixes(&cp,
+					    &psp.vol[psp.nvol].offset,
+					    &psp.vol[psp.nvol].wr))
+						goto fs;
+					if (arfa_lookup_id(gname, psp.user.l, owner,
+					    &id) != ARFA_OK) {
+						inperr(_("НЕТ АРХИВА"));
+						return -1;
+					}
+					psp.vol[psp.nvol].volno = id;
+					if (*cp++ != GOST_RIGHT_PARENTHESIS)
+						goto fs;
+					++psp.nvol;
+					while (*cp == GOST_SPACE) cp++;
+					continue;
+				}
 				u = get_decimal (cp);
 				if (! u || u >= 4096) {
 					inperr(_("ПЛОХ ТОМ"));
@@ -344,12 +421,12 @@ mpar:				inperr(_("НЕТ ПАРАМ"));
 					i = chunk;
 					chunk += u * 040;
 					u = i;
-					psp.vol[psp.nvol].wr = 2;
+					psp.vol[psp.nvol].wr = VOL_CHUNK;
 					++cp;
 				} else if (cp[0] == GOST_MINUS &&
 				    ((cp[1] == GOST_ZE && cp[2] == GOST_PE) ||
 				    (cp[1] == GOST_W && cp[2] == GOST_R))) {
-					psp.vol[psp.nvol].wr = 1;
+					psp.vol[psp.nvol].wr = VOL_READ_WRITE;
 					cp += 3;
 				} else if (cp[0] == GOST_MINUS &&
 				    (off = get_octal (++cp)) > 0) {

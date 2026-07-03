@@ -23,6 +23,7 @@
 #include "encoding.h"
 #include "gost10859.h"
 #include "iobuf.h"
+#include "arfa.h"
 
 static const char *opname_short_bemsh[64] = {
 	"зп",   "зпм",  "рег",  "счм",  "сл",   "вч",   "вчоб", "вчаб",
@@ -228,13 +229,21 @@ print_passport(const struct passport *psp)
 	printf("  arr_end:   %u\n", psp->arr_end);
 	printf("  volumes:   %u\n", psp->nvol);
 	for (i = 0; i < psp->nvol && i < MAXVOL; ++i) {
-		const char *mode = psp->vol[i].wr == 0 ? "read" :
-		    psp->vol[i].wr == 1 ? "write" :
-		    psp->vol[i].wr == 2 ? "chunk" : "unknown";
+		const char *mode = (psp->vol[i].wr & VOL_READ_WRITE) ?
+		    "write" : "read";
 
-		printf("    %2u: lun %02o  volume %u  mode %s  offset %o\n",
-		    i, psp->vol[i].u, psp->vol[i].volno, mode,
-		    psp->vol[i].offset);
+		if (psp->vol[i].volno >= ARFA_ID_BASE)
+			printf("    %2u: lun %02o  arfa-id %u  mode %s  offset %o\n",
+			    i, psp->vol[i].u, psp->vol[i].volno, mode,
+			    psp->vol[i].offset);
+		else if (psp->vol[i].wr == VOL_CHUNK)
+			printf("    %2u: lun %02o  chunk %u  offset %o\n",
+			    i, psp->vol[i].u, psp->vol[i].volno,
+			    psp->vol[i].offset);
+		else
+			printf("    %2u: lun %02o  volume %u  mode %s  offset %o\n",
+			    i, psp->vol[i].u, psp->vol[i].volno, mode,
+			    psp->vol[i].offset);
 	}
 }
 

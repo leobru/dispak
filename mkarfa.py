@@ -35,6 +35,7 @@ import time
 ARFA_MAGIC   = 0x41524641          # "ARFA"
 ARFA_MAXREC  = 128
 ARFA_PATHLEN = 96
+ARFA_ID_BASE = 10000
 ARFA_MAXACL  = 6
 ARFA_MAXZONES = 0o1000             # 512 zones, max область length
 
@@ -359,7 +360,7 @@ class Catalog:
         self.path = os.path.join(root, '.catalog')
         self.fd = None
         self.magic = ARFA_MAGIC
-        self.idseq = 1
+        self.idseq = ARFA_ID_BASE
         self.rec = [empty_rec() for _ in range(ARFA_MAXREC)]
 
     def __enter__(self):
@@ -374,6 +375,8 @@ class Catalog:
                 self.rec = [unpack_rec(data[off + i * REC_SIZE:
                                             off + (i + 1) * REC_SIZE])
                             for i in range(ARFA_MAXREC)]
+        if self.idseq < ARFA_ID_BASE:
+            self.idseq = ARFA_ID_BASE
         return self
 
     def flush(self):

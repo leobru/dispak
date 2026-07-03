@@ -1812,11 +1812,18 @@ e50(void)
 	case 0202:	/* get error description */
 		{
 			uchar           *sp, *dp;
+			const char      *msg;
 			unsigned        di;
+			uint64_t        n;
+			int             arfa_err;
 
-			if (acc.r > E_MAX)
-				acc.r = 0;
-			sp = (uchar*) _(errtxt[acc.r]);
+			arfa_err = acc.l & 040000000;
+			n = ((uint64_t) (acc.l & 037777777) << 24) | acc.r;
+			if (arfa_err)
+				msg = arfa_msg(n > ARFA_MAX_MSG ? 0 : n);
+			else
+				msg = _(errtxt[n > E_MAX ? 0 : n]);
+			sp = (uchar*) msg;
 			dp = core[reg[015]].w_b;
 			for (di = 0; di < 18; ++di)
 				*dp++ = *sp ? utf8_to_gost(&sp) : GOST_SPACE;
