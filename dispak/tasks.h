@@ -38,6 +38,10 @@
 #define TC_BY_MASTER    1       /* остановлена главной */
 #define TC_APPEAL       2       /* обратилась к главной */
 
+/* авост cause number reported for a task stopped by/appealing to the
+ * master (э62 54): 67 = ЗАДАЧА УПРЯТАНА, see errtxt.c */
+#define TC_CAUSE_NUM    67
+
 /* event scale bits (N р. шкалы событий -> 1 << (N-1)) */
 #define EVENT_ALARM         (1 << 0)    /* будильник, 1 р. */
 #define EVENT_PZ_APPEARED   (1 << 10)   /* появилась/отключилась ПЗ, 11 р. */
@@ -51,11 +55,18 @@
 typedef struct {
 	volatile int    pid;            /* 0 = free slot */
 	volatile uint   shifr_l, shifr_r; /* task code (шифр), 24+24 bits */
+	volatile int    catno;          /* number in the input catalog */
 	volatile int    state;          /* TS_* */
 	volatile int    cause;          /* TC_*, valid while stopped */
 	volatile int    master;         /* program channel of the master or 0 */
 	volatile int    inpause;        /* the task is sleeping in э50 7700/э53 17 */
 	volatile int    cancel_pause;   /* э53 47: cancel pause/alarm */
+	volatile uint   hide;           /* поле упрятывания ПЗ для гз (э62 63) */
+	volatile uint   pz_emask;       /* маска событий ПЗ для гз (э62 64) */
+	volatile int    tty;            /* the task owns the terminal */
+	volatile int    tty_read;       /* ... and is reading from it */
+	volatile int    tty_revoke;     /* э62 102: break the terminal read */
+	volatile int    incog_in;       /* э62 44: discard print output */
 
 	/* Event apparatus, mirrored by the owner on every instruction;
 	 * authoritative while the task is stopped. */
@@ -102,13 +113,15 @@ extern char        *task_argv0; /* for spawning subtask processes */
 #define task_self()     (&task_reg->slot[task_chan - 1])
 #define task_channo(t)  ((int)((t) - task_reg->slot) + 1)
 
-int  task_init(int create);     /* attach/create registry, take a slot */
+int  task_init(int create, int catno); /* attach/create registry, take a slot */
 void task_cleanup(void);        /* release the slot, notify relatives */
 int  task_poll(void);           /* run loop hook; E_TERM = asked to end */
 int  task_park(int cause);      /* stop self; E_TERM = asked to end */
 void task_spawn(int bufno);     /* start a dispak process on an input buffer */
 task_slot_t *task_find_pz(void);/* resolve "шифр или № канала ПЗ" on acc */
 task_slot_t *task_by_shifr(uint l, uint r);
+task_slot_t *task_by_catno(int catno);  /* my subtask by catalog number */
+int  task_tty_revoked(void);    /* consume the э62 102 revocation flag */
 int  task_stop_pz(task_slot_t *t);      /* 0 when the task has parked */
 void task_wake(task_slot_t *t);
 void task_kick(task_slot_t *t);         /* ring the doorbell */

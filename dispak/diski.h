@@ -35,6 +35,7 @@ typedef struct disk {
 	md_t	*d_md[DESCR_BLOCKS];	/* up to 040000 zones */
 	u_char	d_modif[DESCR_BLOCKS];
 	u_char	d_mode;
+	u_char	d_physaddr;	/* zone N is at physical zone N (no ZONE_OFFSET) */
     int     (*d_readi)(struct disk *disk_descr, u_int zone, char* buf, char* convol, char* check, u_int mode);
     int     (*d_writei)(struct disk *disk_descr, u_int zone, char* buf, char* convol, char* check, u_int mode);
 } disk_t;

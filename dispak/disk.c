@@ -97,6 +97,57 @@ disk_find_path (char *fname, u_int diskno)
 }
 
 
+/*
+ * Open a disk image by an explicit file name (used for АРФА regions,
+ * which are individual Unix files).  Always the "new" zone structure.
+ */
+void *
+disk_open_path(const char *fname, u_int mode)
+{
+	disk_t  *d;
+	u_int   newmode = 0;
+	int     f;
+
+	if (access(fname, R_OK) < 0) {
+		if (mode == DISK_CREATE) {
+			f = creat(fname, 0644);
+			if (f < 0)
+				return 0;
+			close(f);
+		} else
+			return 0;
+	}
+	if (access(fname, W_OK) < 0) {
+		newmode = DISK_RW_NO_WAY;
+		if (mode >= DISK_READ_WRITE && mode != DISK_CREATE)
+			return 0;
+	}
+	f = open(fname, newmode == DISK_RW_NO_WAY ? O_RDONLY : O_RDWR);
+	if (f == -1)
+		return 0;
+	d = calloc(sizeof(disk_t), 1);
+	if (! d) {
+		close(f);
+		return 0;
+	}
+	d->d_magic = DESCR_MAGIC;
+	d->d_fileno = f;
+	d->d_diskno = 0;
+	d->d_readi = disk_readi2;
+	d->d_writei = disk_writei2;
+	d->d_str = Physical;
+	/*
+	 * АРФА области are addressed physically: zone N lives at zone N of
+	 * the file.  Unlike numerical volumes/drums, they have no reserved
+	 * ZONE_OFFSET at the front.
+	 */
+	d->d_physaddr = 1;
+	if (mode == DISK_CREATE)
+		mode = DISK_READ_WRITE;
+	d->d_mode = newmode | mode;
+	return d;
+}
+
 /* opens $DISKDIR/{diskno}, or ./{diskno}, if $DISKDIR is not set   */
 /* to create a new file, do "cat > {diskno}^JDISK^D^D"              */
 
@@ -405,7 +456,7 @@ static zone_t zone_buf;
 int disk_readi2(disk_t *d, u_int zone, char *buf, char *convol, char *check, u_int mode)
 {
 /*	fprintf(stderr, "disk_readi2: %d zone %o\n", d->d_diskno, zone);*/
-        if (mode != DISK_MODE_PHYS) {
+        if (mode != DISK_MODE_PHYS && !d->d_physaddr) {
             zone += ZONE_OFFSET;
         }
 
@@ -550,7 +601,7 @@ disk_writei2(disk_t *d, u_int zone, char *buf, char *convol, char *check, u_int 
 	unsigned char *c = (unsigned char*) check;
 
 /*	fprintf(stderr, "disk_writei2: %d zone %o\n", d->d_diskno, zone);*/
-	if (mode != DISK_MODE_PHYS) {
+	if (mode != DISK_MODE_PHYS && !d->d_physaddr) {
 		zone += ZONE_OFFSET;
 	}
 

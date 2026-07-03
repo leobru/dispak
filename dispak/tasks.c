@@ -28,6 +28,7 @@ int             task_chan;
 char            *task_argv0;
 
 static char     regpath[MAXPATHLEN];
+static int      is_subtask;     /* attached to an inherited registry */
 static volatile sig_atomic_t    doorbell;
 static volatile sig_atomic_t    childexit;
 
@@ -45,6 +46,16 @@ chld_handler(int sig)
 }
 
 /*
+ * SIGUSR2 is installed without SA_RESTART: its only purpose is to break
+ * a blocking terminal read (э62 102, terminal transfer).
+ */
+static void
+usr2_handler(int sig)
+{
+	doorbell = 1;
+}
+
+/*
  * SA_RESTART keeps the doorbell from breaking terminal reads and disk I/O;
  * pause() and the sleep functions are still interrupted, which is what
  * stop requests and э53 47 (pause cancellation) rely upon.
@@ -56,19 +67,20 @@ install(int sig, void (*fn)(int))
 
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = fn;
-	sa.sa_flags = SA_RESTART;
+	sa.sa_flags = sig == SIGUSR2 ? 0 : SA_RESTART;
 	sigemptyset(&sa.sa_mask);
 	sigaction(sig, &sa, NULL);
 }
 
 int
-task_init(int create)
+task_init(int create, int catno)
 {
 	char    *env = getenv("DISPAK_TASK_REG");
 	task_slot_t *t;
 	int     fd, i;
 
 	if (env) {
+		is_subtask = 1;
 		strcpy(regpath, env);
 		fd = open(regpath, O_RDWR);
 		if (fd < 0) {
@@ -123,9 +135,17 @@ task_init(int create)
 	t = task_self();
 	t->shifr_l = user.l;
 	t->shifr_r = user.r;
+	t->catno = catno;
 	t->cause = TC_NONE;
 	t->master = 0;
 	t->inpause = t->cancel_pause = 0;
+	t->hide = 0;
+	t->pz_emask = 0;
+	/* The topmost TELE task starts owning the terminal;
+	 * subtasks receive it with э62 46. */
+	t->tty = env ? 0 : !notty;
+	t->tty_read = t->tty_revoke = 0;
+	t->incog_in = 0;
 	t->events_in = t->events_clr_in = 0;
 	t->emask_in = t->ehandler_in = 0;
 	t->eenab_in = -1;
@@ -136,6 +156,7 @@ task_init(int create)
 	t->state = TS_RUN;
 
 	install(SIGUSR1, usr1_handler);
+	install(SIGUSR2, usr2_handler);
 	install(SIGCHLD, chld_handler);
 	return 0;
 }
@@ -226,6 +247,45 @@ task_reap(void)
 	}
 }
 
+/*
+ * A spawned subtask runs with stdin on /dev/null and stdout on a file.
+ * When the master transfers the terminal to it (э62 46), rewire the
+ * standard descriptors to the controlling terminal, and back again when
+ * the terminal is taken away.  The topmost task keeps its own descriptors.
+ */
+static void
+task_tty_update(task_slot_t *t)
+{
+	static int      owned, saved_in = -1, saved_out = -1;
+	int             fd;
+
+	if (!is_subtask || t->tty == owned)
+		return;
+	fflush(stdout);
+	if (t->tty) {
+		fd = open("/dev/tty", O_RDWR);
+		if (fd < 0)
+			return; /* no controlling terminal */
+		if (saved_in < 0)
+			saved_in = dup(0);
+		if (saved_out < 0)
+			saved_out = dup(1);
+		dup2(fd, 0);
+		dup2(fd, 1);
+		close(fd);
+		clearerr(stdin);
+		notty = 0;
+	} else {
+		if (saved_in >= 0)
+			dup2(saved_in, 0);
+		if (saved_out >= 0)
+			dup2(saved_out, 1);
+		clearerr(stdin);
+		notty = 1;
+	}
+	owned = t->tty;
+}
+
 int
 task_poll(void)
 {
@@ -239,6 +299,11 @@ task_poll(void)
 	}
 	if (doorbell) {
 		doorbell = 0;
+		task_tty_update(t);
+		if (t->incog_in) {
+			t->incog_in = 0;
+			pout_enable = 0;
+		}
 		if (t->cancel_pause) {
 			struct itimerval itv = {{0, 0}, {0, 0}};
 			setitimer(ITIMER_REAL, &itv, NULL);
@@ -386,6 +451,42 @@ task_find_pz(void)
 	return t;
 }
 
+/*
+ * Find an own subtask by its number in the input catalog.
+ */
+task_slot_t *
+task_by_catno(int catno)
+{
+	int     i;
+
+	if (!task_reg || !catno)
+		return NULL;
+	for (i = 0; i < TASK_MAXCHAN; ++i) {
+		task_slot_t *t = &task_reg->slot[i];
+		if (t->pid && t->catno == catno && t->master == task_chan)
+			return t;
+	}
+	return NULL;
+}
+
+/*
+ * Consume the "terminal reset from input" flag (э62 102) after an
+ * interrupted terminal read.
+ */
+int
+task_tty_revoked(void)
+{
+	task_slot_t     *t;
+
+	if (!task_reg)
+		return 0;
+	t = task_self();
+	if (!t->tty_revoke)
+		return 0;
+	t->tty_revoke = 0;
+	return 1;
+}
+
 int
 task_stop_pz(task_slot_t *t)
 {
@@ -415,17 +516,20 @@ task_wake(task_slot_t *t)
 
 /*
  * Run a freshly formed task as a subordinate-task process:
- * dispak <input buffer number>, batch mode, printing to pzNNN.out.
+ * dispak -x --output-raw=pzNNN.raw <input buffer number>, batch mode,
+ * with the terminal output going to pzNNN.out.  The raw print stream
+ * file is dumped when the subtask ends and serves э62 41 requests.
  */
 void
 task_spawn(int bufno)
 {
-	char    arg[16], outname[32];
+	char    arg[16], outname[32], rawopt[48];
 	int     pid, fd;
 
 	if (!task_reg || !task_argv0)
 		return;
 	sprintf(arg, "%03o", bufno);
+	sprintf(rawopt, "--output-raw=pz%03o.raw", bufno);
 	fflush(stdout);
 	fflush(stderr);
 	pid = fork();
@@ -446,7 +550,7 @@ task_spawn(int bufno)
 		dup2(fd, 1);
 		close(fd);
 	}
-	execlp(task_argv0, task_argv0, arg, (char*) 0);
+	execlp(task_argv0, task_argv0, "-x", rawopt, arg, (char*) 0);
 	perror(task_argv0);
 	_exit(1);
 }

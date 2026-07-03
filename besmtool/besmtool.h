@@ -1,6 +1,17 @@
 #define ZBYTES	6144	/* size of zone in bytes */
 #define MAXZ	010000	/* max size of disk is about 25 Mbytes */
 
+/*
+ * A volume is either a numbered disk image or an АРФА region (область), a
+ * single Unix file selected by "arfa:<name>"/a non-numeric argument.
+ * open_disk() opens the primary volume, open_from_disk() a copy source.
+ */
+extern char *besm_arfa_dir;
+extern char *besm_arfa_region;
+extern char *besm_from_arfa;
+void *open_disk (unsigned diskno, unsigned mode);
+void *open_from_disk (unsigned diskno, unsigned mode);
+
 void list_all_disks (void);
 void list_disk (unsigned diskno);
 void passports (unsigned diskno, unsigned start);

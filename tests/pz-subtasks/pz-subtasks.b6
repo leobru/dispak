@@ -10,6 +10,10 @@ eeв1а3
 	 15,vtm, cwrd
 	  ,ita , 15
 	  ,*50 , 7701b
+	  ,ita , 14
+	  ,asn , 50b
+	  ,aox , strq
+	  ,atx , sreq
  wexp:	  ,*53 , 17b
 	  ,*53 , 16b
 	  ,aax , b11
@@ -36,6 +40,30 @@ eeв1а3
 	  ,atx , res
 	  ,*64 , inf64
 	  ,xta , pzc
+	  ,*62 , 54b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,*62 , 101b
+	  ,atx , res
+	  ,*64 , inf64
+	 13,vtm, bufa
+	  ,xta ,
+	  ,*62 , 61b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,*64 , infb
+	 13,vtm, res
+	  ,xta , pzc
+	  ,*62 , 63b
+	  ,atx , res
+	  ,*64 , inf64
+	 13,vtm, evw
+	  ,xta , pzc
+	  ,*62 , 64b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta , pzc
 	  ,*53 , 31b
 	  ,atx , res
 	  ,*64 , inf64
@@ -44,6 +72,15 @@ eeв1а3
 	  ,*50 , 206b
 	  ,aox ,
 	  ,u1a , wend
+	  ,xta , sreq
+	  ,*62 , 41b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta , sreq
+	  ,aox , z7777
+	  ,*62 , 41b
+	  ,atx , res
+	  ,*64 , inf64
 	  ,xta , pzc
 	  ,*53 , 30b
 	  ,atx , res
@@ -53,9 +90,18 @@ eeв1а3
  b11:	  ,log , 2000 0000 0000
  pzc:	  ,oct , 2031 44
  evw:	  ,log , 2
+ strq:	  ,log , 1030000
+ z7777:	  ,log , 7777
+ sreq:	  ,log , 0
  res:	  ,log , 0
+ bufa:	  ,log , 0
+	  ,log , 0
  inf64:	  ,    , res
 	  ,    , res
+	 2,    , 20b
+	 8,    ,
+ infb:	  ,    , bufa
+	  ,    , bufa
 	 2,    , 20b
 	 8,    ,
  cwrd:	  ,oct , 1442 5055

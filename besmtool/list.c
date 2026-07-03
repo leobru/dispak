@@ -24,7 +24,7 @@ static int get_disk_size(unsigned disknum)
 	void *disk;
 	int nzones;
 
-	disk = disk_open(disknum, DISK_READ_ONLY);
+	disk = open_disk(disknum, DISK_READ_ONLY);
 	if (!disk)
 		return -1;
 
@@ -260,7 +260,7 @@ search_disk (unsigned diskno, unsigned char *pattern, unsigned start, unsigned l
 	printf ("' on disk %d/%04o, %04o zones\n", diskno, start,
 		length ? length : MAXZ-start);
 
-	disk = disk_open (diskno, DISK_READ_ONLY);
+	disk = open_disk (diskno, DISK_READ_ONLY);
 	if (! disk) {
 		fprintf (stderr, "Disk %d: cannot open\n", diskno);
 		return;

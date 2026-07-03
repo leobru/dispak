@@ -27,7 +27,7 @@ file_to_disk (unsigned to_diskno, unsigned to_start, unsigned length,
 		}
 	}
 
-	disk = disk_open (to_diskno, DISK_READ_WRITE);
+	disk = open_disk (to_diskno, DISK_READ_WRITE);
 	if (! disk) {
 		fprintf (stderr, "Cannot open disk %d\n", to_diskno);
 		return;
@@ -167,7 +167,7 @@ dir_to_disk (unsigned to_diskno, char *from_dir)
 	char check[48];
 	char filename [MAXPATHLEN];
 
-	disk = disk_open (to_diskno, DISK_READ_WRITE);
+	disk = open_disk (to_diskno, DISK_READ_WRITE);
 	if (! disk) {
 		fprintf (stderr, "Cannot open disk %d\n", to_diskno);
 		return;
@@ -225,12 +225,12 @@ disk_to_disk (unsigned to_diskno, unsigned to_start, unsigned length,
 		(limit - from_start), (limit - from_start) * 6,
 		from_diskno, from_start, to_diskno, to_start);
 
-	src_disk = disk_open (from_diskno, DISK_READ_ONLY);
+	src_disk = open_from_disk (from_diskno, DISK_READ_ONLY);
 	if (! src_disk) {
 		fprintf (stderr, "Cannot open disk %d\n", from_diskno);
 		return;
 	}
-	dest_disk = disk_open (to_diskno, DISK_CREATE);
+	dest_disk = open_disk (to_diskno, DISK_CREATE);
 	if (! dest_disk) {
 		fprintf (stderr, "Cannot open disk %d\n", to_diskno);
 		return;
@@ -270,7 +270,7 @@ disk_to_file (unsigned from_diskno, unsigned from_start, unsigned length,
 		}
 	}
 
-	disk = disk_open (from_diskno, DISK_READ_ONLY);
+	disk = open_disk (from_diskno, DISK_READ_ONLY);
 	if (! disk) {
 		fprintf (stderr, "Cannot open disk %d\n", from_diskno);
 		return;

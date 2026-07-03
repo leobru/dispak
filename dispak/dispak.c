@@ -72,6 +72,7 @@
 #include "optab.h"
 #include "disk.h"
 #include "tasks.h"
+#include "arfa.h"
 #include "encoding.h"
 #include "gost10859.h"
 
@@ -117,6 +118,7 @@ enum {
 	OPT_COVERAGE,
 	OPT_DRUM_DUMP,
 	OPT_SUBTASKS,
+	OPT_ARFA_DIR,
 };
 
 /* Table of options. */
@@ -150,6 +152,7 @@ static struct option longopts[] = {
 	{ "coverage",		0,	0,	OPT_COVERAGE    },
 	{ "drum-dump",		1,	0,	OPT_DRUM_DUMP   },
 	{ "subtasks",		0,	0,	OPT_SUBTASKS	},
+	{ "arfa-dir",		1,	0,	OPT_ARFA_DIR	},
 	{ 0,			0,	0,	0		},
 };
 
@@ -195,6 +198,8 @@ usage ()
 	fprintf (stderr, _("  --drum-dump=file       output drum 27 to file\n"));
 	fprintf (stderr, _("  --subtasks             run tasks formed by extracode 050 7701\n"));
 	fprintf (stderr, _("                         as subordinate-task processes\n"));
+	fprintf (stderr, _("  --arfa-dir=dir         directory for АРФА archive regions\n"));
+	fprintf (stderr, _("                         (default ~/.besm6/arfa)\n"));
 
 	exit (1);
 }
@@ -350,6 +355,9 @@ main(int argc, char **argv)
 		case OPT_SUBTASKS:
 			subtasks = 1;
 			break;
+		case OPT_ARFA_DIR:
+			arfa_dir = optarg;
+			break;
 		}
 	}
 	if (bootstrap) {
@@ -401,7 +409,7 @@ main(int argc, char **argv)
 		fprintf(stderr, "%03o\n", i);
 		exit(1);
 	}
-	if (task_init(subtasks) < 0)
+	if (task_init(subtasks, i) < 0)
 		exit(1);
 	if (notty) {
 		/* Batch task. */
@@ -439,7 +447,6 @@ main(int argc, char **argv)
 	gettimeofday(&start_time, NULL);
 	icnt = run();
 	gettimeofday(&stop_time, NULL);
-	task_cleanup();
 	sec = TIMEDIFF(start_time, stop_time) - excuse;
 	if (!sec)
 		sec = 0.000001;
@@ -451,6 +458,10 @@ main(int argc, char **argv)
 	}
 	if (pout_enable && xnative && pout_raw)
 		pout_dump(pout_raw);
+	arfa_cleanup();
+	/* Release the task slot only after the print stream is dumped,
+	 * so the master finds the stream file complete. */
+	task_cleanup();
 	if (drum_dump_filename)
 		drum_dump(027, drum_dump_filename);
 	terminate();

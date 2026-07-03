@@ -23,6 +23,7 @@
 #include "gost10859.h"
 #include "encoding.h"
 #include "tasks.h"
+#include "arfa.h"
 
 #define SMALL_DISKS()	(getenv("BESM6_SMALL_DISKS") || disk_emulate_725)
 
@@ -1078,7 +1079,7 @@ e53(void)
 		}
 		en = pz->eenab_in >= 0 ? pz->eenab_in : pz->eenab;
 		acc.l = ev & 0xffffff;
-		acc.r = (en ? 0 : 1 << 23) | (1 << 15);
+		acc.r = (en ? 0 : 1 << 23) | (1 << 15) | (pz->hide & 077777);
 		return E_SUCCESS;
 	}
 	case 037: {		/* pass a dataset to/from a subtask */
@@ -1911,14 +1912,290 @@ e62(void)
 	switch (reg[016]) {
 	case 0:		/* unconditional termination */
 		return E_TERM;
+	case 041: {	/* get an input/output stream zone */
+		int catno = acc.l & 0377;	/* 32-25 рр. */
+		int type = (acc.r >> 18) & 077;	/* 24-19 рр. */
+		int page = (acc.r >> 12) & 037;	/* 17-13 рр. */
+		int zone = acc.r & 07777;	/* 12-1 рр. */
+		char rawname[32];
+		FILE *fp;
+		int i;
+		if (catno == 0)
+			return E_UNIMP;	/* own streams: handled by the supervisor */
+		acc.l = 0;
+		if (type != 1) {
+			acc.r = 2;	/* нет запрашиваемого потока */
+			return E_SUCCESS;
+		}
+		/* The print stream of a subtask is dumped to pzNNN.raw
+		 * when it ends (see task_spawn). */
+		sprintf(rawname, "pz%03o.raw", catno);
+		fp = fopen(rawname, "r");
+		if (!fp) {
+			/* Not dumped yet (the subtask is still running),
+			 * or no such task at all. */
+			acc.r = task_by_catno(catno) ? 0 : 1;
+			return E_SUCCESS;
+		}
+		if (fseek(fp, (long) zone * 6144, SEEK_SET) < 0 ||
+		    fread(core + page * 02000, 6144, 1, fp) != 1) {
+			fclose(fp);
+			acc.r = 0;	/* запрашиваемой зоны нет */
+			return E_SUCCESS;
+		}
+		fclose(fp);
+		for (i = page * 02000; i < (page + 1) * 02000; ++i) {
+			cflags[i] &= ~C_UNPACKED;
+			convol[i] |= CV_NUMBER;
+		}
+		acc.r = 077777;
+		return E_SUCCESS;
+	}
 	case 0042:	/* flush output stream, but we don't */
 		return E_SUCCESS;
-	case 0044:	/* cancel output stream, but we don't */
+	case 0044: {	/* cancel output stream */
+		int catno = acc.l & 0377;	/* 32-25 рр. */
+		task_slot_t *pz;
+		if (catno && (pz = task_by_catno(catno)) != NULL) {
+			/* установка "Инкогнито" в ПЗ */
+			pz->incog_in = 1;
+			task_kick(pz);
+		}
+		/* for the own task: feigned, as before */
 		return E_SUCCESS;
+	}
+	case 0046: {	/* transfer terminal(s) between master and subtask */
+		task_slot_t *pz = task_find_pz();
+		task_slot_t *self;
+		int mode = (reg[015] >> 12) & 7;	/* 15-13 рр. */
+		acc.l = 0;
+		if (!pz) {
+			acc.r = 0;	/* нет ПЗ */
+			return E_SUCCESS;
+		}
+		self = task_self();
+		switch (mode) {
+		case 1:		/* a terminal from master to subtask */
+		case 2:		/* all terminals from master to subtask */
+			if (!self->tty) {
+				acc.r = 1;	/* нет указанного терминала */
+				return E_SUCCESS;
+			}
+			self->tty = 0;
+			pz->tty = 1;
+			break;
+		case 3:		/* a terminal from subtask to master */
+		case 4:		/* all terminals from subtask to master */
+			if (!pz->tty) {
+				acc.r = 1;
+				return E_SUCCESS;
+			}
+			if (pz->tty_read) {
+				acc.r = 4;	/* терминал занят обменом */
+				return E_SUCCESS;
+			}
+			pz->tty = 0;
+			self->tty = 1;
+			break;
+		default:
+			acc.r = 2;	/* недопустимый вид работы */
+			return E_SUCCESS;
+		}
+		task_kick(pz);
+		acc.r = 077777;
+		return E_SUCCESS;
+	}
 	case 0053:	/* set extracode intercept mask, we feign sucess */
 		acc.l = 0;
 		acc.r = 077777;
 		return E_SUCCESS;
+	case 0054: {	/* get авост cause of a subtask */
+		task_slot_t *pz = task_find_pz();
+		acc.l = 0;
+		if (!pz) {
+			acc.r = 0;	/* нет ПЗ в решении */
+			return E_SUCCESS;
+		}
+		acc.l = 1 << 23;	/* 48 р. */
+		acc.r = pz->cause == TC_NONE ? 0 : TC_CAUSE_NUM;
+		return E_SUCCESS;
+	}
+	case 061: {	/* get task codes (шифры) of subordinate tasks:
+			 * СМ = 0 - own, or шифр/канал of the queried task;
+			 * М15 - address of the output array for the шифры,
+			 * one per word in channel order.  The answer is 0 when
+			 * there are no ПЗ, otherwise the MSB ored with
+			 * (MSB >> nchan) for every ПЗ listed in the buffer. */
+		int chan = task_chan, i;
+		uint scale = 0;
+		ushort addr = reg[015];
+		alureg_t w;
+		if (task_reg && (acc.l | acc.r)) {
+			task_slot_t *t;
+			if (acc.l == 0 && acc.r > 0 && acc.r <= TASK_MAXCHAN)
+				t = &task_reg->slot[acc.r - 1];
+			else
+				t = task_by_shifr(acc.l, acc.r);
+			chan = t && t->pid ? task_channo(t) : 0;
+		}
+		acc.l = acc.r = 0;
+		if (!task_reg || !chan)
+			return E_SUCCESS;
+		for (i = 0; i < TASK_MAXCHAN; ++i) {
+			task_slot_t *s = &task_reg->slot[i];
+			if (s->pid && s->master == chan)
+				scale |= (1 << 23) >> (i + 1);
+		}
+		if (!scale)
+			return E_SUCCESS;
+		if (!addr) {
+			acc.r = 4;	/* массив не принадлежит памяти задачи */
+			return E_SUCCESS;
+		}
+		for (i = 0; i < TASK_MAXCHAN; ++i) {
+			task_slot_t *s = &task_reg->slot[i];
+			if (s->pid && s->master == chan) {
+				w.l = s->shifr_l;
+				w.r = s->shifr_r;
+				STORE(w, addr);
+				addr = ADDR(addr + 1);
+			}
+		}
+		acc.l = 1 << 23 | scale;
+		return E_SUCCESS;
+	}
+	case 0063: {	/* set hide area of the subtask for the master */
+		task_slot_t *pz = task_find_pz();
+		acc.l = 0;
+		if (!pz)
+			acc.r = 0;
+		else if (!reg[015])
+			acc.r = 4;	/* поле не принадлежит памяти гз */
+		else {
+			pz->hide = ADDR(reg[015]);
+			acc.r = 077777;
+		}
+		return E_SUCCESS;
+	}
+	case 0064: {	/* set event mask of the subtask for the master */
+		task_slot_t *pz = task_find_pz();
+		alureg_t w;
+		acc.l = 0;
+		if (!pz)
+			acc.r = 0;
+		else if (!reg[015])
+			acc.r = 4;	/* слово не принадлежит памяти гз */
+		else {
+			LOAD(w, reg[015]);
+			pz->pz_emask = w.r & 0xffffff;
+			acc.r = 077777;
+		}
+		return E_SUCCESS;
+	}
+	case 0072: {	/* pass the subtask to a new master, or release it */
+		task_slot_t *pz = task_find_pz();
+		task_slot_t *m;
+		alureg_t w;
+		acc.l = 0;
+		if (!pz) {
+			acc.r = 0;
+			return E_SUCCESS;
+		}
+		if (!reg[015]) {
+			acc.r = 4;
+			return E_SUCCESS;
+		}
+		if (pz->state != TS_STOPPED) {
+			acc.r = 3;	/* ПЗ не остановлена */
+			return E_SUCCESS;
+		}
+		LOAD(w, reg[015]);
+		pz->cause = TC_NONE;
+		if (w.l == 0 && w.r == 0) {
+			pz->master = 0;
+			acc.r = 077777;
+		} else if ((m = task_by_shifr(w.l, w.r)) == NULL) {
+			pz->master = 0;
+			acc.r = 1;	/* нет новой главной */
+		} else {
+			pz->master = task_channo(m);
+			task_raise(m, EVENT_PZ_APPEARED);
+			acc.r = 077777;
+		}
+		return E_SUCCESS;
+	}
+	case 0077: {	/* raise авост in self or in a stopped subtask */
+		task_slot_t *pz;
+		int pid, i;
+		if (acc.l == 0 && acc.r == 0) {
+			/* For the own task: ends it.  Авост processing with an
+			 * established cause is not emulated. */
+			if (accex.l == 00070707)
+				lasterr = accex.r & 0177;
+			return E_TERM;
+		}
+		pz = task_find_pz();
+		acc.l = 0;
+		if (!pz) {
+			acc.r = 0;
+			return E_SUCCESS;
+		}
+		if (pz->state != TS_STOPPED) {
+			acc.r = 3;	/* ПЗ не остановлена */
+			return E_SUCCESS;
+		}
+		pid = pz->pid;
+		pz->state = TS_END_REQ;
+		task_kick(pz);
+		for (i = 0; i < 5000 && pz->pid == pid; ++i)
+			usleep(1000);
+		acc.r = 077777;
+		return E_SUCCESS;
+	}
+	case 0101: {	/* get the scale of stopped subtasks */
+		int chan = task_chan, i;
+		if (task_reg && (acc.l | acc.r)) {
+			task_slot_t *t;
+			if (acc.l == 0 && acc.r > 0 && acc.r <= TASK_MAXCHAN)
+				t = &task_reg->slot[acc.r - 1];
+			else
+				t = task_by_shifr(acc.l, acc.r);
+			chan = t && t->pid ? task_channo(t) : 0;
+		}
+		acc.l = acc.r = 0;
+		if (!task_reg || !chan)
+			return E_SUCCESS;
+		for (i = 0; i < TASK_MAXCHAN; ++i) {
+			task_slot_t *s = &task_reg->slot[i];
+			if (s->pid && s->master == chan && s->state == TS_STOPPED)
+				acc.l |= 1 << (23 - i);	/* 48 р. = канал 1 */
+		}
+		return E_SUCCESS;
+	}
+	case 0102: {	/* reset a terminal from input */
+		int i;
+		if (!(acc.r & 077)) {
+			acc.l = 0;
+			acc.r = 0;	/* ошибка в номере терминала */
+			return E_SUCCESS;
+		}
+		acc.l = 0;
+		acc.r = 1;	/* не принадлежит задаче или не на приеме */
+		if (!task_reg)
+			return E_SUCCESS;
+		for (i = 0; i < TASK_MAXCHAN; ++i) {
+			task_slot_t *s = &task_reg->slot[i];
+			if (s->pid && s->tty && s->tty_read &&
+			    (s->master == task_chan || s == task_self())) {
+				s->tty_revoke = 1;
+				if (s->pid != (int) getpid())
+					kill(s->pid, SIGUSR2);
+				acc.r = 077777;
+				break;
+			}
+		}
+		return E_SUCCESS;
+	}
 	case 0055:	/* get error catcher address */
 		acc.l = 0;
 		acc.r = 040000000;
@@ -1929,8 +2206,6 @@ e62(void)
 		acc.r = 077777;
 		return E_SUCCESS;
 	case 0076:	/* drop incognito */
-		return E_SUCCESS;
-	case 0102:	/* stop reading from terminal */
 		return E_SUCCESS;
 	case 0103:	/* get logical console number by physical */
 		acc.l = acc.r = 0;
@@ -1954,8 +2229,12 @@ e62(void)
 	default:	/* set volume offset or close volume */
 		u = reg[016] >> 9;
 		if ((u >= 030) && (u < 070)) {
-			if (!disks[u].diskno)
+			if (!disks[u].diskno) {
+				/* АРФА regions live on diskno 0 handles. */
+				if ((reg[016] & 0777) == 0777)
+					arfa_lun_close(u);
 				return E_SUCCESS;
+			}
 			if ((disks[u].offset = reg[016] & 0777) == 0777) {
 				if (disks[u].diskh)
 					disk_close(disks[u].diskh);
@@ -1966,36 +2245,6 @@ e62(void)
 		}
 		return E_UNIMP;
 	}
-}
-
-int
-arfa(void)
-{
-    int addr = reg[016];
-    alureg_t arg;
-    LOAD(arg, addr);
-    reg[016] = 0;
-    switch (arg.l >> 18) {
-    case 016:                   /* admin password confirmation */
-        break;
-    case 065: {                 /* reading main archive volume */
-        void * h;
-        int page, zone, r;
-        h = disk_open(2248, DISK_READ_ONLY);
-        if (!h) {
-            fprintf(stderr, "No archive volume 2248\n");
-            return E_UNIMP;
-        }
-        page = (arg.l >> 6) & 037;
-        zone = arg.r & 07777;
-        r = disk_readi(h, zone, (char *)(core + page*02000), (char *)convol + (page*02000), NULL, DISK_MODE_QUIET);
-        disk_close(h);
-        return r == DISK_IO_OK ? E_SUCCESS : E_DISKERR;
-    } break;
-    default:
-        return E_UNIMP;
-    }
-    return E_SUCCESS;
 }
 
 int
@@ -2349,12 +2598,22 @@ stdio_ttin(uchar flags, ushort a1, ushort a2)
 	else
 		fputs("-\r", stdout);
 	fflush(stdout);
+	if (task_reg)
+		task_self()->tty_read = 1;
 	if (! fgets((char*) buf, sizeof(buf), stdin)) {
-		if (feof(stdin))
+		if (task_reg)
+			task_self()->tty_read = 0;
+		if (task_tty_revoked()) {
+			/* э62 102: снята с приема, take an empty line */
+			buf[0] = '\n';
+		} else if (feof(stdin))
 			return E_TERM;
-		perror("stdin");
-		return E_INT;
-	}
+		else {
+			perror("stdin");
+			return E_INT;
+		}
+	} else if (task_reg)
+		task_self()->tty_read = 0;
 	dp = core[a1].w_b;
 	sp = buf;
 	while (dp - core[a1].w_b < (a2 - a1 + 1) * 6) {

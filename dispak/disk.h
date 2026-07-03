@@ -30,6 +30,7 @@
 extern char	*disk_path;		/* disk search path */
 
 extern  void    *disk_open(u_int diskno_decimal, u_int mode);   /* NULL if failure */
+extern  void    *disk_open_path(const char *fname, u_int mode); /* NULL if failure */
 extern  int     disk_close(void *disk_descr);
 extern  int     disk_setmode(void *disk_descr, u_int mode);
 extern  int     disk_readi(void *disk_descr, u_int zone, char* buf, char* convol, char* check, u_int mode);

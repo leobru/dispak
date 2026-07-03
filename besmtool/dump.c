@@ -126,7 +126,7 @@ dump_disk (unsigned diskno, unsigned start, unsigned length)
 	unsigned limit, z;
 	char buf [ZBYTES];
 
-	disk = disk_open (diskno, DISK_READ_ONLY);
+	disk = open_disk (diskno, DISK_READ_ONLY);
 	if (! disk) {
 		fprintf (stderr, "Disk %d: cannot open\n", diskno);
 		return;
@@ -234,7 +234,7 @@ check_disk (unsigned diskno, unsigned start, unsigned length)
 	char buf [ZBYTES];
 	char cwords [6*8];
 
-	disk = disk_open (diskno, DISK_READ_ONLY);
+	disk = open_disk (diskno, DISK_READ_ONLY);
 	if (! disk) {
 		fprintf (stderr, "Disk %d: cannot open\n", diskno);
 		return;
@@ -400,7 +400,7 @@ view_disk (unsigned diskno, unsigned start, unsigned length, char *encoding)
 	if (show_file)
 		nwords_per_line = 1;
 
-	disk = disk_open (diskno, DISK_READ_ONLY);
+	disk = open_disk (diskno, DISK_READ_ONLY);
 	if (! disk) {
 		fprintf (stderr, "Disk %d: cannot open\n", diskno);
 		return;

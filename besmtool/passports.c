@@ -16,7 +16,7 @@ passports (unsigned diskno, unsigned start)
 		start = 0543;
 		/* 0547 для Соснового Бора. */
 	}
-	disk = disk_open (diskno, DISK_READ_ONLY);
+	disk = open_disk (diskno, DISK_READ_ONLY);
 	if (! disk) {
 		fprintf (stderr, "Disk %d: cannot open\n", diskno);
 		return;

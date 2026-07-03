@@ -17,7 +17,7 @@ erase_disk (unsigned diskno, unsigned start, unsigned length, int format)
 	} else
 		memset (buf, 0, ZBYTES);
 
-	disk = disk_open (diskno, DISK_READ_WRITE);
+	disk = open_disk (diskno, DISK_READ_WRITE);
 	if (! disk) {
 		fprintf (stderr, "Cannot open disk %d\n", diskno);
 		return;
