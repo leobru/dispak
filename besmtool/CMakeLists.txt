@@ -18,6 +18,7 @@ add_executable(besmtool
     passports.c
     ../dispak/disk.c
     ../dispak/encoding.c
+    ../dispak/arfaname.c
 )
 target_compile_options(besmtool PRIVATE -Wall -g -O2 -Werror)
 install(TARGETS besmtool DESTINATION bin)

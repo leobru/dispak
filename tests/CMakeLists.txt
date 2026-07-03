@@ -1,15 +1,12 @@
 add_test(NAME algol-besm6 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/algol-besm6)
 add_test(NAME algol-gdr COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/algol-gdr)
+add_test(NAME arfa-basic COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/arfa-basic)
+add_test(NAME arfa-homoglyph COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/arfa-homoglyph)
 add_test(NAME autocode-itm COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/autocode-itm)
 add_test(NAME bemsh-ms COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/bemsh-ms)
-add_test(NAME stdin-eof
-    COMMAND Python3::Interpreter
-        ${CMAKE_SOURCE_DIR}/tests/stdin-eof.py
-        $<TARGET_FILE:dispak>
-        ${CMAKE_BINARY_DIR}/dispak
-        ${CMAKE_SOURCE_DIR}/tests/bemsh-ms/bemsh.b6)
 add_test(NAME bemsh-standalone COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/bemsh-standalone)
 add_test(NAME dtran COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/dtran)
+add_test(NAME e64-repeat-symbol COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/e64-repeat-symbol)
 add_test(NAME edit COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/edit)
 add_test(NAME forex COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/forex)
 add_test(NAME fortran-dubna COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/fortran-dubna)
@@ -24,9 +21,6 @@ add_test(NAME madlen COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTO
 add_test(NAME monitor80 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/monitor80)
 add_test(NAME pascal-monitor COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pascal-monitor)
 add_test(NAME pascal-prettyprint COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pascal-prettyprint)
-add_test(NAME arfa-basic COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/arfa-basic)
-add_test(NAME pz-basic COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pz-basic)
-add_test(NAME pz-subtasks COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pz-subtasks)
 add_test(NAME pprog01 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pprog01)
 add_test(NAME pprog02 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pprog02)
 add_test(NAME pprog03 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pprog03)
@@ -39,6 +33,8 @@ add_test(NAME pprog08 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECT
 add_test(NAME pprog09 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pprog09)
 add_test(NAME pprog10 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pprog10)
 add_test(NAME punchtest COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/punchtest)
+add_test(NAME pz-basic COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pz-basic)
+add_test(NAME pz-subtasks COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pz-subtasks)
 add_test(NAME serp-gens-ogl COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/serp-gens-ogl)
 add_test(NAME serp-keys-2053 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/serp-keys-2053)
 add_test(NAME serp-keys-2153 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/serp-keys-2153)
@@ -46,8 +42,14 @@ add_test(NAME serp-list-2113 COMMAND Python3::Interpreter ../run-test.py WORKING
 add_test(NAME serp-ogl-2113 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/serp-ogl-2113)
 add_test(NAME serp-users-2053 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/serp-users-2053)
 add_test(NAME serp-users-2153 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/serp-users-2153)
+add_test(NAME sort COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/sort)
 add_test(NAME sp4 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/sp4)
 add_test(NAME stat COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/stat)
+add_test(NAME stdin-eof
+    COMMAND Python3::Interpreter
+        ${CMAKE_SOURCE_DIR}/tests/stdin-eof.py
+        $<TARGET_FILE:dispak>
+        ${CMAKE_BINARY_DIR}/dispak
+        ${CMAKE_SOURCE_DIR}/tests/bemsh-ms/bemsh.b6)
 add_test(NAME whatis-4001 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/whatis-4001)
 add_test(NAME whetstone COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/whetstone)
-add_test(NAME e64-repeat-symbol COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/e64-repeat-symbol)

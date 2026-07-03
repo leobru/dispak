@@ -24,6 +24,9 @@
 #include "gost10859.h"
 #include "encoding.h"
 #include "arfa.h"
+#include "arfaname.h"
+
+extern int gost_latin;          /* dispak -l: render ambiguous names in Latin */
 
 #define ARFA_MAGIC      0x41524641      /* "ARFA" */
 #define ARFA_MAXREC     128
@@ -156,44 +159,10 @@ shifr_match(uint a, uint b)
 }
 
 /*
- * GOST name -> file system path (UTF-8), GOST_DOT being
- * the component separator.
+ * GOST name <-> file system path is handled by the shared resolver in
+ * arfaname.c (arfa_resolve / arfa_render_name), which maps each каталог level
+ * to a directory and renders homoglyphs per component (см. arfaname.h).
  */
-static void
-utf8_put(char **pp, unsigned short u)
-{
-	char    *p = *pp;
-
-	if (u < 0x80)
-		*p++ = u;
-	else if (u < 0x800) {
-		*p++ = 0xc0 | (u >> 6);
-		*p++ = 0x80 | (u & 0x3f);
-	} else {
-		*p++ = 0xe0 | (u >> 12);
-		*p++ = 0x80 | ((u >> 6) & 0x3f);
-		*p++ = 0x80 | (u & 0x3f);
-	}
-	*pp = p;
-}
-
-static void
-fs_path(char *dst, const uchar *gname)
-{
-	char    *p;
-	int     i;
-
-	strcpy(dst, arfa_root);
-	p = dst + strlen(dst);
-	*p++ = '/';
-	for (i = 0; gname[i] != 0377 && i < ARFA_PATHLEN; ++i) {
-		if (gname[i] == GOST_DOT)
-			*p++ = '/';
-		else
-			utf8_put(&p, gost_to_unicode(gname[i]));
-	}
-	*p = 0;
-}
 
 static arfa_rec_t *
 find_by_name(const uchar *gname)
@@ -535,7 +504,7 @@ arfa(void)
 	switch (code) {
 	case 001: {             /* создание области */
 		uchar   gname[ARFA_PATHLEN];
-		char    path[MAXPATHLEN + ARFA_PATHLEN * 3];
+		char    path[ARFA_PATH_MAX];
 		uint    group = (accex.r >> 20) & 3;
 		uint    kind = (accex.r >> 17) & 7;
 		uint    indiv = (accex.r >> 16) & 1;
@@ -590,7 +559,11 @@ arfa(void)
 			reg[016] = ARFA_NO_SPACE_CAT;
 			return E_SUCCESS;
 		}
-		fs_path(path, gname);
+		if (!arfa_resolve(arfa_root, gname, 1, gost_latin, path)) {
+			cat_unlock(0);
+			reg[016] = ARFA_NO_NAME;
+			return E_SUCCESS;
+		}
 		if (len == 0) {
 			if (mkdir(path, 0755) < 0 && errno != EEXIST) {
 				cat_unlock(0);
@@ -633,7 +606,7 @@ arfa(void)
 	}
 	case 002:               /* уничтожение области */
 	case 025: {
-		char    path[MAXPATHLEN + ARFA_PATHLEN * 3];
+		char    path[ARFA_PATH_MAX];
 		uint    pass = is.l & 07777;
 
 		if (cat_lock() < 0)
@@ -675,11 +648,12 @@ arfa(void)
 			reg[016] = ARFA_IS_CATALOG;
 			return E_SUCCESS;
 		}
-		fs_path(path, r->name);
-		if (r->is_catalog)
-			rmdir(path);
-		else
-			unlink(path);
+		if (arfa_resolve(arfa_root, r->name, 0, gost_latin, path)) {
+			if (r->is_catalog)
+				rmdir(path);
+			else
+				unlink(path);
+		}
 		list_del(conf_r, r->id);
 		list_del(conf_w, r->id);
 		r->used = 0;
@@ -961,7 +935,7 @@ arfa(void)
 		return E_SUCCESS;
 	}
 	case 012: {             /* дозаказ области */
-		char    path[MAXPATHLEN + ARFA_PATHLEN * 3];
+		char    path[ARFA_PATH_MAX];
 		int     ro = (is.r >> 11) & 1;
 		int     i, lun = 0, inuse = 0;
 		void    *h;
@@ -1006,8 +980,11 @@ arfa(void)
 			reg[016] = ARFA_MANY_LUNS;
 			return E_SUCCESS;
 		}
-		fs_path(path, r->name);
-		h = disk_open_path(path, ro ? DISK_READ_ONLY : DISK_READ_WRITE);
+		if (!arfa_resolve(arfa_root, r->name, 0, gost_latin, path))
+			h = NULL;
+		else
+			h = disk_open_path(path,
+				ro ? DISK_READ_ONLY : DISK_READ_WRITE);
 		if (!h) {
 			cat_unlock(0);
 			reg[016] = ARFA_NO_VOLUME;

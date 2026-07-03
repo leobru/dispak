@@ -53,6 +53,7 @@ add_executable(dispak
     extra.c
     tasks.c
     arfa.c
+    arfaname.c
     vt340_curses.c
     disk.c
     errtxt.c

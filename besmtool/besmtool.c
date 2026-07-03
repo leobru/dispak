@@ -37,6 +37,7 @@
 #include "disk.h"
 #include "encoding.h"
 #include "gost10859.h"
+#include "arfaname.h"
 
 enum {
 	OPT_START,
@@ -79,74 +80,61 @@ static struct option longopts[] = {
  * physically (no ZONE_OFFSET) - disk_open_path handles that.
  */
 char *besm_arfa_dir;		/* --arfa-dir, NULL = ~/.besm6/arfa */
-char *besm_arfa_region;		/* primary volume, if "arfa:<name>" */
+char *besm_arfa_region;		/* primary volume, if a region name */
 char *besm_from_arfa;		/* --from-arfa=<name> source region */
 
+/* АРФА archive root: --arfa-dir or ~/.besm6/arfa. */
 static void
-utf8_encode (char **pp, unsigned short u)
+arfa_root (char *dst)
 {
-	char *p = *pp;
-
-	if (u < 0x80)
-		*p++ = u;
-	else if (u < 0x800) {
-		*p++ = 0xc0 | (u >> 6);
-		*p++ = 0x80 | (u & 0x3f);
-	} else {
-		*p++ = 0xe0 | (u >> 12);
-		*p++ = 0x80 | ((u >> 6) & 0x3f);
-		*p++ = 0x80 | (u & 0x3f);
-	}
-	*pp = p;
-}
-
-/*
- * Build the Unix path of an область from its (UTF-8) name, exactly as
- * dispak's fs_path does: fold the name to GOST, then render it back through
- * gost_to_unicode, with the dot (GOST_DOT) separating каталог levels into
- * directories.
- */
-static void
-arfa_path (char *dst, const char *name)
-{
-	unsigned char *s = (unsigned char *) name;
-	char *p;
-
 	if (besm_arfa_dir)
 		strcpy (dst, besm_arfa_dir);
 	else {
 		disk_local_path (dst);
 		strcat (dst, "/arfa");
 	}
-	p = dst + strlen (dst);
-	*p++ = '/';
-	while (*s) {
-		unsigned char g = utf8_to_gost (&s);
-		if (g == GOST_DOT)
-			*p++ = '/';
-		else
-			utf8_encode (&p, gost_to_unicode (g));
-	}
-	*p = 0;
 }
 
 /*
- * Open the primary volume: an АРФА region if "arfa:<name>" was given,
+ * Resolve a region's (UTF-8) name to its existing file path: fold the name to
+ * GOST, then let the shared resolver walk the tree, trying both homoglyph
+ * renderings per каталог level.  Returns 1 on success.
+ */
+static int
+arfa_lookup (const char *name, char *path)
+{
+	char root [MAXPATHLEN];
+	unsigned char gname [128], *s = (unsigned char *) name;
+	int n = 0;
+
+	while (*s && n < 95)
+		gname[n++] = utf8_to_gost (&s);
+	gname[n] = GOST_EOF;
+	arfa_root (root);
+	return arfa_resolve (root, gname, 0, gost_latin, path);
+}
+
+/*
+ * Open the primary volume: an АРФА region if a region name was given,
  * otherwise a numbered disk image.
  */
 void *
 open_disk (unsigned diskno, unsigned mode)
 {
-	char path [MAXPATHLEN];
+	char path [ARFA_PATH_MAX];
 	void *d;
 
 	if (! besm_arfa_region)
 		return disk_open (diskno, mode);
-	arfa_path (path, besm_arfa_region);
 	/* Never fabricate a region file: that is mkarfa's job (it also
 	 * maintains the catalog).  Open existing files only. */
 	if (mode == DISK_CREATE)
 		mode = DISK_READ_WRITE;
+	if (! arfa_lookup (besm_arfa_region, path)) {
+		fprintf (stderr, "Region '%s': not found under archive root\n",
+			besm_arfa_region);
+		return 0;
+	}
 	d = disk_open_path (path, mode);
 	if (! d)
 		fprintf (stderr, "Region '%s': cannot open %s\n",
@@ -158,12 +146,16 @@ open_disk (unsigned diskno, unsigned mode)
 void *
 open_from_disk (unsigned diskno, unsigned mode)
 {
-	char path [MAXPATHLEN];
+	char path [ARFA_PATH_MAX];
 	void *d;
 
 	if (! besm_from_arfa)
 		return disk_open (diskno, mode);
-	arfa_path (path, besm_from_arfa);
+	if (! arfa_lookup (besm_from_arfa, path)) {
+		fprintf (stderr, "Region '%s': not found under archive root\n",
+			besm_from_arfa);
+		return 0;
+	}
 	d = disk_open_path (path, mode);
 	if (! d)
 		fprintf (stderr, "Region '%s': cannot open %s\n",
@@ -175,11 +167,12 @@ open_from_disk (unsigned diskno, unsigned mode)
 static int
 arfa_region_zones (const char *name)
 {
-	char path [MAXPATHLEN];
+	char path [ARFA_PATH_MAX];
 	void *d;
 	int n;
 
-	arfa_path (path, name);
+	if (! arfa_lookup (name, path))
+		return -1;
 	d = disk_open_path (path, DISK_READ_ONLY);
 	if (! d)
 		return -1;

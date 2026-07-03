@@ -146,6 +146,63 @@ def gost_to_unicode(ch):
 
 
 # ---------------------------------------------------------------------------
+# Homoglyphs: GOST letter codes whose Cyrillic and Latin glyphs coincide.
+# Values are the *Latin* Unicode; the Cyrillic form is GOST_TO_UNICODE[code].
+# (Mirrors gost_to_unicode_lat vs _cyr in dispak/encoding.c.)
+# ---------------------------------------------------------------------------
+HOMOGLYPH_LAT = {
+    0o40: 0x41,  0o42: 0x42,  0o45: 0x45,  0o52: 0x4b,  0o54: 0x4d,
+    0o55: 0x48,  0o56: 0x4f,  0o60: 0x50,  0o61: 0x43,  0o62: 0x54,
+    0o63: 0x59,  0o65: 0x58,
+}
+
+
+def gost_to_unicode2(ch, latin):
+    """gost_to_unicode with an explicit Latin/Cyrillic choice."""
+    if latin and ch in HOMOGLYPH_LAT:
+        return HOMOGLYPH_LAT[ch]
+    return GOST_TO_UNICODE[ch & 0xff]
+
+
+def is_gost_letter(g):
+    return 0o40 <= g <= 0o114
+
+
+def is_homoglyph(g):
+    return g in HOMOGLYPH_LAT
+
+
+def render_component(comp, amb_latin):
+    """Render one GOST component (bytes) to a Unicode string.
+
+    Ambiguous components (only homoglyphs, or both a uniquely-Cyrillic and a
+    uniquely-Latin letter) take homoglyphs from amb_latin; deterministic ones
+    from their uniquely-scripted letters.
+    """
+    has_l = has_c = False
+    for g in comp:
+        if not is_gost_letter(g) or is_homoglyph(g):
+            continue
+        if GOST_TO_UNICODE[g] < 0x400:
+            has_l = True
+        else:
+            has_c = True
+    if (has_l and has_c) or (not has_l and not has_c):
+        hscript = amb_latin
+    else:
+        hscript = has_l
+    return ''.join(chr(gost_to_unicode2(g, hscript if is_homoglyph(g) else 0))
+                   for g in comp)
+
+
+def render_display(gname):
+    """Dot-separated display form (ambiguous homoglyphs default to Cyrillic)."""
+    n = gname.find(GOST_EOF)
+    body = gname[:n] if n >= 0 else gname
+    return '.'.join(render_component(c, 0) for c in body.split(bytes([GOST_DOT])))
+
+
+# ---------------------------------------------------------------------------
 # Name / шифр conversion
 # ---------------------------------------------------------------------------
 def is_alnum_gost(g):
@@ -187,6 +244,15 @@ def name_to_gost(name):
             comp += 1
     if comp == 0:
         raise ValueError("empty final name component in %r" % name)
+    # Each component, taken as typed and capitalized, must be one of that
+    # component's valid renderings (all homoglyphs Latin, or all Cyrillic) —
+    # i.e. no mixed / inconsistent homoglyphs within a component.
+    for typed, gcomp in zip(name.split('.'), bytes(out).split(bytes([GOST_DOT]))):
+        up = typed.upper()
+        if up not in (render_component(gcomp, 0), render_component(gcomp, 1)):
+            raise ValueError(
+                "mixed homoglyphs in component %r; use one alphabet "
+                "consistently within each каталог level" % typed)
     buf = bytearray([GOST_EOF]) * ARFA_PATHLEN
     buf[:len(out)] = out
     buf[len(out)] = GOST_EOF
@@ -218,29 +284,35 @@ def shifr_str(val):
 
 
 def gost_name_str(name_bytes):
-    """Render a stored GOST name back to UTF-8 for display (dot-separated)."""
-    out = []
-    for b in name_bytes:
-        if b == GOST_EOF:
-            break
-        out.append(chr(gost_to_unicode(b)))   # GOST_DOT renders as '.'
-    return ''.join(out)
+    """Render a stored GOST name for display (dot-separated, homoglyph-aware)."""
+    return render_display(name_bytes)
 
 
-def fs_relpath(name_bytes):
-    """Relative filesystem path (UTF-8) for an область, as dispak's fs_path.
+def gost_components(name_bytes):
+    """List of GOST component byte-strings (каталог levels)."""
+    n = name_bytes.find(GOST_EOF)
+    body = name_bytes[:n] if n >= 0 else name_bytes
+    return body.split(bytes([GOST_DOT]))
 
-    Каталог levels (the dot) become directory separators.
-    """
-    out = []
-    for b in name_bytes:
-        if b == GOST_EOF:
-            break
-        if b == GOST_DOT:
-            out.append('/')
+
+def resolve_path(root, name_bytes):
+    """Find an область's existing filesystem path, trying both homoglyph
+    renderings per каталог level (mirrors arfaname.c's arfa_resolve). Returns
+    the path or None."""
+    path = root
+    for gcomp in gost_components(name_bytes):
+        cands = [render_component(gcomp, 0)]
+        alt = render_component(gcomp, 1)
+        if alt != cands[0]:
+            cands.append(alt)
+        for c in cands:
+            trial = os.path.join(path, c)
+            if os.path.exists(trial):
+                path = trial
+                break
         else:
-            out.append(chr(gost_to_unicode(b)))
-    return ''.join(out)
+            return None
+    return path
 
 
 # ---------------------------------------------------------------------------
@@ -441,13 +513,13 @@ def do_list(root):
 def do_delete(args):
     root = args.arfa_dir or default_root()
     gname = name_to_gost(args.name)
-    fpath = os.path.join(root, fs_relpath(gname))
 
     cat = Catalog(root)
     with cat:
         r = cat.find_by_name(gname)
         if r is None:
             sys.exit("no such область: %r" % args.name)
+        fpath = resolve_path(root, gname)
         if r['is_catalog'] and has_children(cat, gname) and not args.force:
             sys.exit("каталог %r has sub-области; delete them first (or --force)"
                      % args.name)
@@ -459,7 +531,9 @@ def do_delete(args):
                 sys.exit("область has %d shared захват(s); use --force"
                          % r['shared_cnt'])
         try:
-            if r['is_catalog']:
+            if fpath is None:
+                pass                    # file already gone
+            elif r['is_catalog']:
                 os.rmdir(fpath)
             else:
                 os.unlink(fpath)
@@ -488,9 +562,6 @@ def do_create(args):
     if not is_catalog and length <= 0:
         sys.exit("specify --length (>0) or --catalog")
 
-    relpath = fs_relpath(gname)
-    fpath = os.path.join(root, relpath)
-
     cat = Catalog(root)
     with cat:
         existing = cat.find_by_name(gname)
@@ -511,6 +582,18 @@ def do_create(args):
             if not shifr_match(prec['owner'], owner) and not args.force:
                 sys.exit("parent каталог is owned by %s, not %s"
                          % (shifr_str(prec['owner']), shifr_str(owner)))
+
+        # Path: leaf as typed (capitalized), under the parent's actual dir.
+        typed_leaf = args.name.split('.')[-1].upper()
+        cut = gname.index(GOST_EOF)
+        if GOST_DOT in gname[:cut]:
+            i = gname[:cut].rindex(GOST_DOT)
+            parent_path = resolve_path(root, gname[:i])
+            if parent_path is None:
+                sys.exit("parent каталог directory not found under %s" % root)
+            fpath = os.path.join(parent_path, typed_leaf)
+        else:
+            fpath = os.path.join(root, typed_leaf)
 
         r = existing or cat.free_slot()
         if r is None:

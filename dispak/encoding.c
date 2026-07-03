@@ -1490,6 +1490,18 @@ gost_to_unicode (unsigned char ch)
 }
 
 /*
+ * Like gost_to_unicode, but with an explicit Latin/Cyrillic choice
+ * independent of the global gost_latin flag.  Used to classify and render
+ * АРФА region names by homoglyph (a code where the two tables differ).
+ */
+unsigned short
+gost_to_unicode2 (unsigned char ch, int latin)
+{
+	return latin ? gost_to_unicode_lat [ch] :
+		gost_to_unicode_cyr [ch];
+}
+
+/*
  * Write GOST-10859 symbol to file.
  * Convert to local encoding (UTF-8, KOI8-R, CP-1251, CP-866).
  */
