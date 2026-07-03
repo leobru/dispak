@@ -46,3 +46,8 @@ This can be done by script:
 
     cd tests
     ./show-tests.py -u
+
+This regenerates the list from the test subdirectories. Custom tests that are
+not simple output-comparison directories (for example `stdin-eof`) live in
+`tests/extra-tests.cmake`, which `show-tests.py -u` appends verbatim — add any
+such hand-written `add_test()` there so they are not lost on regeneration.

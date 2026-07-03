@@ -67,6 +67,13 @@ def update_cmakelists(tests, file_name):
         for dir in sorted(tests):
             file.write(f"add_test(NAME {dir} COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${{CMAKE_SOURCE_DIR}}/tests/{dir})\n")
             count += 1
+        # Append hand-written tests that are not option-based subdirectories
+        # (e.g. stdin-eof), so regeneration does not drop them.
+        extra = "extra-tests.cmake"
+        if os.path.isfile(extra):
+            with open(extra, 'r') as ef:
+                file.write(ef.read())
+            print(f"Appended {extra}.")
     print(f"\nFile {file_name} updated with {count} tests.")
 
 #
