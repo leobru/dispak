@@ -35,4 +35,6 @@ struct passport {
 		ushort			offset;
 	}                       vol[MAXVOL];
 	uint                    arr_end;        /* offset to input array 1 end */
+	alureg_t                glavn;          /* ГЛА: шифр главной задачи,
+						   0 - no ГЛА */
 };

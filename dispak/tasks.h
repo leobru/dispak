@@ -110,6 +110,11 @@ extern task_reg_t  *task_reg;   /* NULL when subtask support is off */
 extern int         task_chan;   /* own program channel, 1-based */
 extern char        *task_argv0; /* for spawning subtask processes */
 
+/* ГЛА passport option: stop at the first user-code instruction and
+ * raise "появилась ПЗ" in the master task with the given шифр.
+ * Set by input(), nonzero only until the stop is performed. */
+extern uint        task_gla_l, task_gla_r;
+
 #define task_self()     (&task_reg->slot[task_chan - 1])
 #define task_channo(t)  ((int)((t) - task_reg->slot) + 1)
 

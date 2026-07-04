@@ -324,6 +324,23 @@ mpar:				inperr(_("НЕТ ПАРАМ"));
 			 * SPE */
 			psp.spec = 1;
 
+		} else if (art[0] == GOST_GHE && art[1] == GOST_EL &&
+		    art[2] == GOST_A) {
+			/* ГЛА <шифр главной задачи> */
+			if (! cp)
+				goto mpar;
+			for (i = 0; i < 6; ++i) {
+				if (*cp > GOST_9)
+					goto d_6_12;
+				psp.glavn.l = (psp.glavn.l << 4) | *cp++;
+			}
+			if (*cp <= GOST_9)
+				for (i = 0; i < 6; ++i) {
+					if (*cp > GOST_9)
+						goto d_6_12;
+					psp.glavn.r = (psp.glavn.r << 4) | *cp++;
+				}
+
 		} else if (art[0] == GOST_O && art[1] == GOST_ZE &&
 		    art[2] == GOST_Y) {
 			/* ОЗУ - игнорируем */

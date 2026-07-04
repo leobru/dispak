@@ -68,6 +68,14 @@ octal were used for the temporary (drum) storage.
 
 TELE^ (the task will be interactive, awaiting connection from a terminal)
 
+ГЛА NNNNXX[YYYYYY]^ (only the Cyrillic spelling is recognized)
+
+Names the main (controlling) task of this one. When a task with the given
+user id runs in the same task registry (dispak extension, see Subtasks.md),
+this task becomes its subordinate, stops before the first instruction of the
+user code, and the "появилась ПЗ" event is raised in the main task; otherwise
+the request is ignored.
+
 The passport ends with a character E.
 
 2. A data set consists of a sequence of data elements. In all element types

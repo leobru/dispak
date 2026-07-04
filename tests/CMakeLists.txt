@@ -34,6 +34,7 @@ add_test(NAME pprog09 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECT
 add_test(NAME pprog10 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pprog10)
 add_test(NAME punchtest COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/punchtest)
 add_test(NAME pz-basic COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pz-basic)
+add_test(NAME pz-gla COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pz-gla)
 add_test(NAME pz-subtasks COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/pz-subtasks)
 add_test(NAME serp-gens-ogl COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/serp-gens-ogl)
 add_test(NAME serp-keys-2053 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/serp-keys-2053)

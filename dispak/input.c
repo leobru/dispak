@@ -17,6 +17,7 @@
 #include "disk.h"
 #include "iobuf.h"
 #include "arfa.h"
+#include "tasks.h"
 
 static FILE             *ibuf;
 static char             ibufname[MAXPATHLEN];
@@ -47,6 +48,8 @@ ibr:
 	}
 
 	user = psp.user;
+	task_gla_l = psp.glavn.l;
+	task_gla_r = psp.glavn.r;
 	spec_saved = pspspec = psp.spec;
 	spec = 1;
 	acc = user;

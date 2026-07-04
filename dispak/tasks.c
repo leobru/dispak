@@ -26,9 +26,12 @@
 task_reg_t      *task_reg;
 int             task_chan;
 char            *task_argv0;
+uint            task_gla_l, task_gla_r;
 
 static char     regpath[MAXPATHLEN];
 static int      is_subtask;     /* attached to an inherited registry */
+static task_slot_t *park_notify; /* raise "появилась ПЗ" here only after
+				  * the own state is published (ГЛА) */
 static volatile sig_atomic_t    doorbell;
 static volatile sig_atomic_t    childexit;
 
@@ -330,6 +333,19 @@ task_poll(void)
 	case TS_END_REQ:
 		return E_TERM;
 	}
+	if ((task_gla_l | task_gla_r) && !supmode) {
+		/* ГЛА: at the first user-code instruction link to the
+		 * master and park; ignored when no task with the given
+		 * шифр is around. */
+		task_slot_t *m = task_by_shifr(task_gla_l, task_gla_r);
+
+		task_gla_l = task_gla_r = 0;
+		if (m && m != t) {
+			t->master = task_channo(m);
+			park_notify = m;
+			return task_park(TC_BY_MASTER);
+		}
+	}
 	/* Mirror the event apparatus for the master to query. */
 	t->events = events;
 	t->emask = emask;
@@ -371,6 +387,10 @@ task_park(int cause)
 	t->eenab = eenab;
 	t->cause = cause;
 	t->state = TS_STOPPED;
+	if (park_notify) {
+		task_raise(park_notify, EVENT_PZ_APPEARED);
+		park_notify = NULL;
+	}
 
 	sigemptyset(&block);
 	sigaddset(&block, SIGUSR1);
