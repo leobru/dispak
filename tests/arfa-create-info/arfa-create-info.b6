@@ -1,0 +1,81 @@
+шифр 419999 зс5^
+лен 41(2048)^
+eeв1а3
+*name arfa create info
+*no list
+*assembler
+ program: ,name,
+	  ,xta ,
+	  ,u1a , p01
+ p01:	  ,xta , kluch
+	  ,*63 , dt1
+	  ,xta , len2
+	  ,u1a , w01
+ w01:	  ,xta , kluch
+	  ,*63 , ct1
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta , len2
+	  ,u1a , w02
+ w02:	  ,xta , kluch
+	  ,*63 , ct1
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,u1a , w03
+ w03:	  ,xta , kluch
+	  ,*63 , it1
+	  ,atx , res
+	  ,ita , 14
+	  ,atx , resm
+	  ,*64 , inf64
+	  ,*64 , infm
+	  ,xta , nbuf
+	  ,u1a , w04
+ w04:	  ,xta , kluch
+	  ,*63 , nt1
+	  ,atx , res
+	  ,ita , 14
+	  ,atx , resm
+	  ,*64 , inf64
+	  ,*64 , infm
+	  ,*64 , infn
+	  ,xta ,
+	  ,u1a , w05
+ w05:	  ,xta , kluch
+	  ,*63 , dt1
+	  ,call, stop*
+ kluch:	  ,gost, 6hключар
+ len2:	  ,log , 2
+ nbuf:	  ,    ,
+	  ,    , bufn
+ ct1:	  ,oct , 0100 0000 0000 0010
+	  ,gost, 6hтест1;
+ it1:	  ,oct , 0700 0000 0000 0010
+	  ,gost, 6hтест1;
+ nt1:	  ,oct , 1300 0000 0000 0010
+	  ,gost, 6hтест1;
+ dt1:	  ,oct , 0200 0000 0000 0010
+	  ,gost, 6hтест1;
+ res:	  ,log , 0
+ resm:	  ,log , 0
+ bufn:	  ,log , 0
+ inf64:	  ,    , res
+	  ,    , res
+	 2,    , 20b
+	 8,    ,
+ infm:	  ,    , resm
+	  ,    , resm
+	 2,    , 20b
+	 8,    ,
+ infn:	  ,    , bufn
+	  ,    , bufn
+	 2,    , 20b
+	 8,    ,
+	  ,end ,
+*execute
+*end file
+``````
+еконец

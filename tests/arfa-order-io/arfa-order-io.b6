@@ -1,0 +1,83 @@
+шифр 419999 зс5^
+лен 41(2048)^
+eeв1а3
+*name arfa order io
+*no list
+*assembler
+ program: ,name,
+	  ,xta ,
+	  ,u1a , p01
+ p01:	  ,xta , kluch
+	  ,*63 , dt1
+	  ,xta , len2
+	  ,u1a , w01
+ w01:	  ,xta , kluch
+	  ,*63 , ct1
+	  ,xta , scal
+	  ,u1a , w02
+ w02:	  ,xta , kluch
+	  ,*63 , ot1
+	  ,atx , res
+	  ,ita , 14
+	  ,atx , resm
+	  ,*64 , inf64
+	  ,*64 , infm
+	  ,xta , patt
+	  ,atx , 4000b
+	  ,*70 , cw1
+	  ,xta ,
+	  ,atx , 4000b
+	  ,*70 , cw2
+	  ,xta , 4000b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,u1a , w03
+ w03:	  ,xta , kluch
+	  ,*63 , sh1
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,u1a , w04
+ w04:	  ,xta , kluch
+	  ,*63 , sh2
+	  ,atx , res
+	  ,ita , 14
+	  ,atx , resm
+	  ,*64 , inf64
+	  ,*64 , infm
+	  ,xta ,
+	  ,u1a , w05
+ w05:	  ,xta , kluch
+	  ,*63 , dt1
+	  ,call, stop*
+ kluch:	  ,gost, 6hключар
+ len2:	  ,log , 2
+ patt:	  ,oct , 7531 2464 0000 7777
+ scal:	  ,oct , 2000
+ cw1:	  ,oct , 0000 0200 0031 0000
+ cw2:	  ,oct , 0010 0200 0031 0000
+ ct1:	  ,oct , 0100 0000 0000 0010
+	  ,gost, 6hтест1;
+ ot1:	  ,oct , 1200 0000 0000 0010
+	  ,gost, 6hтест1;
+ sh1:	  ,oct , 1431 0000 0000 0020
+ sh2:	  ,oct , 1531 0000 0000 0000
+ dt1:	  ,oct , 0200 0000 0000 0010
+	  ,gost, 6hтест1;
+ res:	  ,log , 0
+ resm:	  ,log , 0
+ inf64:	  ,    , res
+	  ,    , res
+	 2,    , 20b
+	 8,    ,
+ infm:	  ,    , resm
+	  ,    , resm
+	 2,    , 20b
+	 8,    ,
+	  ,end ,
+*execute
+*end file
+``````
+еконец

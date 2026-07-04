@@ -1,0 +1,90 @@
+шифр 419999 зс5^
+лен 41(2048)^
+eeв1а3
+*name arfa catalog
+*no list
+*assembler
+ program: ,name,
+	  ,xta ,
+	  ,u1a , p01
+ p01:	  ,xta , kluch
+	  ,*63 , dsub
+	  ,xta ,
+	  ,u1a , p02
+ p02:	  ,xta , kluch
+	  ,*63 , dkat
+	  ,xta ,
+	  ,u1a , w01
+ w01:	  ,xta , kluch
+	  ,*63 , ckat
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta , len1
+	  ,u1a , w02
+ w02:	  ,xta , kluch
+	  ,*63 , csub
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta , prmr
+	  ,u1a , w03
+ w03:	  ,xta , kluch
+	  ,*63 , lkat
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,*64 , infc
+	  ,xta ,
+	  ,u1a , w04
+ w04:	  ,xta , kluch
+	  ,*63 , dkat
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,u1a , w05
+ w05:	  ,xta , kluch
+	  ,*63 , dsub
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,u1a , w06
+ w06:	  ,xta , kluch
+	  ,*63 , dkat
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,call, stop*
+ kluch:	  ,gost, 6hключар
+ len1:	  ,log , 1
+ prmr:	  ,001 , 1
+	  ,    , bufc
+ ckat:	  ,oct , 0100 0000 0000 0010
+	  ,gost, 12hтесткат;
+ csub:	  ,oct , 0100 0000 0000 0010
+	  ,gost, 12hтесткат.суб;
+ lkat:	  ,oct , 1000 0000 0000 0010
+	  ,gost, 12hтесткат;
+ dkat:	  ,oct , 0200 0000 0000 0010
+	  ,gost, 12hтесткат;
+ dsub:	  ,oct , 0200 0000 0000 0010
+	  ,gost, 12hтесткат.суб;
+ res:	  ,log , 0
+ bufc:	  ,log , 0
+	  ,log , 0
+	  ,log , 0
+ inf64:	  ,    , res
+	  ,    , res
+	 2,    , 20b
+	 8,    ,
+ infc:	  ,    , bufc
+	  ,    , bufc+2
+	 2,    , 20b
+	 8,    ,
+	  ,end ,
+*execute
+*end file
+``````
+еконец

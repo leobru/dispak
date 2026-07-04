@@ -7,3 +7,4 @@ pz*.raw
 arfa-work/
 stuff/
 __pycache__/
+*-work/

@@ -65,6 +65,8 @@ const char *arfa_msg(uint n);   /* КЛЮЧАР answer text by answer code */
 void arfa_lun_close(int lun);   /* release an область-attached LUN */
 void arfa_cleanup(void);        /* drop захваты held by this process */
 int  arfa_lookup_id(const uchar *gname, uint user, uint owner, uint *id);
+int  arfa_id_is_user(uint id);  /* user-visible encoded область id */
+uint arfa_lun_id(int lun);      /* encoded id attached to a LUN, or 0 */
 int  arfa_attach_lun(int lun, uint id, int write, ushort offset);
 
 #endif  /* arfa_h */

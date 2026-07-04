@@ -1,0 +1,101 @@
+шифр 419999 зс5^
+лен 41(2048)^
+eeв1а3
+*name arfa controls
+*no list
+*assembler
+ program: ,name,
+	  ,xta ,
+	  ,u1a , p01
+ p01:	  ,xta , kluch
+	  ,*63 , dt1p
+	  ,xta ,
+	  ,u1a , p02
+ p02:	  ,xta , kluch
+	  ,*63 , dt1
+	  ,xta , len2
+	  ,u1a , w01
+ w01:	  ,xta , kluch
+	  ,*63 , ct1
+	  ,xta ,
+	  ,u1a , w02
+ w02:	  ,xta , kluch
+	  ,*63 , pw1
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,u1a , w03
+ w03:	  ,xta , kluch
+	  ,*63 , cf1
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,u1a , w04
+ w04:	  ,xta , kluch
+	  ,*63 , gr1
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,u1a , w05
+ w05:	  ,xta , kluch
+	  ,*63 , gr1a
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,u1a , w06
+ w06:	  ,xta , kluch
+	  ,*63 , fr1
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	 13,vtm, 31777b
+	 13,*62 ,
+	  ,xta ,
+	  ,u1a , w07
+ w07:	  ,xta , kluch
+	  ,*63 , dt1p
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta ,
+	  ,u1a , w08
+ w08:	  ,xta , kluch
+	  ,*63 , it1
+	  ,ita , 14
+	  ,atx , res
+	  ,*64 , inf64
+	  ,call, stop*
+ kluch:	  ,gost, 6hключар
+ len2:	  ,log , 2
+ ct1:	  ,oct , 0100 0000 0000 0010
+	  ,gost, 6hтест1;
+ it1:	  ,oct , 0700 0000 0000 0010
+	  ,gost, 6hтест1;
+ dt1:	  ,oct , 0200 0000 0000 0010
+	  ,gost, 6hтест1;
+ dt1p:	  ,oct , 0200 0123 0000 0010
+	  ,gost, 6hтест1;
+ pw1:	  ,oct , 0300 0000 0123 0010
+	  ,gost, 6hтест1;
+ cf1:	  ,oct , 0500 0123 0000 0010
+	  ,gost, 6hтест1;
+ gr1:	  ,oct , 3000 0000 4000 0010
+	  ,gost, 6hтест1;
+ gr1a:	  ,oct , 3000 0000 4000 0010
+	  ,gost, 6hтест1;
+ fr1:	  ,oct , 3100 0000 0000 0010
+	  ,gost, 6hтест1;
+ res:	  ,log , 0
+ inf64:	  ,    , res
+	  ,    , res
+	 2,    , 20b
+	 8,    ,
+	  ,end ,
+*execute
+*end file
+``````
+еконец

@@ -1670,8 +1670,13 @@ e50(void)
 		acc.l = 0;
 		{
 			unsigned        u = (acc.r >> 12) & 077;
+			uint            id;
 			if (disks[u].diskno)
 				acc.r = to_2_10(disks[u].diskno);
+			else if ((id = arfa_lun_id(u)) != 0) {
+				acc.l = (id >> 24) & 01777;
+				acc.r = id & 0xffffff;
+			}
 			else if (!disks[u].diskh)
 				acc.r = 0;
 			else
@@ -1739,13 +1744,23 @@ e50(void)
         }       return E_SUCCESS;
 	case 0131: {		/* attach volume to handle */
 		unsigned        u;
+		uint            volid;
+		int             write;
 
 		u = acc.l >> 18;
 		if ((((acc.l >> 12) &  077) != 077) | (u < 030) | (u > 067))
 			return E_CWERR;
+		volid = ((acc.l & 01777) << 24) | acc.r;
+		write = (volid & 0x10000) == 0;
+		volid &= ~0x10000;
 		acc.l = 0;
 		if (disks[u].diskh || disks[u].diskno) {
 			acc.r = 3;
+			return E_SUCCESS;
+		}
+		if (arfa_id_is_user(volid)) {
+			acc.r = arfa_attach_lun(u, volid, write, 0) == ARFA_OK ?
+				0 : 1;
 			return E_SUCCESS;
 		}
 		disks[u].diskno = NDISK(acc.r);

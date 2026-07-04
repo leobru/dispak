@@ -1,7 +1,10 @@
 add_test(NAME algol-besm6 COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/algol-besm6)
 add_test(NAME algol-gdr COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/algol-gdr)
-add_test(NAME arfa-basic COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/arfa-basic)
+add_test(NAME arfa-catalog COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/arfa-catalog)
+add_test(NAME arfa-controls COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/arfa-controls)
+add_test(NAME arfa-create-info COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/arfa-create-info)
 add_test(NAME arfa-homoglyph COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/arfa-homoglyph)
+add_test(NAME arfa-order-io COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/arfa-order-io)
 add_test(NAME autocode-itm COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/autocode-itm)
 add_test(NAME bemsh-ms COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/bemsh-ms)
 add_test(NAME bemsh-standalone COMMAND Python3::Interpreter ../run-test.py WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests/bemsh-standalone)
@@ -60,3 +63,8 @@ add_test(NAME stdin-eof
         $<TARGET_FILE:dispak>
         ${CMAKE_BINARY_DIR}/dispak
         ${CMAKE_SOURCE_DIR}/tests/bemsh-ms/bemsh.b6)
+
+add_test(NAME arfa-e50-id
+    COMMAND Python3::Interpreter
+        ${CMAKE_SOURCE_DIR}/tests/arfa-e50-id.py
+        $<TARGET_FILE:dispak>)

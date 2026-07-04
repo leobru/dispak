@@ -10,3 +10,8 @@ add_test(NAME stdin-eof
         $<TARGET_FILE:dispak>
         ${CMAKE_BINARY_DIR}/dispak
         ${CMAKE_SOURCE_DIR}/tests/bemsh-ms/bemsh.b6)
+
+add_test(NAME arfa-e50-id
+    COMMAND Python3::Interpreter
+        ${CMAKE_SOURCE_DIR}/tests/arfa-e50-id.py
+        $<TARGET_FILE:dispak>)

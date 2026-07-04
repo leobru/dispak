@@ -1,1 +1,1 @@
---arfa-dir=arfa-work arfa-homoglyph.b6
+--arfa-dir=arfa-work --arfa-scratch arfa-homoglyph.b6

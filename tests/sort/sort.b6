@@ -8,8 +8,9 @@ main start 1
  vtm '30000'(13)
  *66 is
  kk 0,'10'(8)
- *66 is        comment out this line
- kk 0,'10'(8)  and this one to make the test pass
+* *66 is        uncomment out this line
+* kk 0,'10'(8)  and this one to make the test fail
+* reusing resident standard programs is NYI in mini OS
 printo extrd printo
  vtm res(14)
  its 14

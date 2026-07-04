@@ -83,6 +83,34 @@ static uint     conf_r[ARFA_MAXHOLD], conf_w[ARFA_MAXHOLD];
 static uint     my_excl[ARFA_MAXHOLD];
 static uint     my_shared[ARFA_MAXHOLD];
 
+static uint
+user_id(uint id)
+{
+	return (id << 17) | 0x0ee;
+}
+
+static uint
+internal_id(uint id)
+{
+	id &= ~0x10000;
+	if ((id & 07777) == 0x0ee)
+		return id >> 17;
+	return id;
+}
+
+int
+arfa_id_is_user(uint id)
+{
+	id &= ~0x10000;
+	return (id & 07777) == 0x0ee;
+}
+
+uint
+arfa_lun_id(int lun)
+{
+	return lun_id[lun] ? user_id(lun_id[lun]) : 0;
+}
+
 const char *
 arfa_msg(uint n)
 {
@@ -358,7 +386,7 @@ resolve(alureg_t is, ushort isaddr, arfa_rec_t **out, uint *owner)
 	} else if (way == 0) {
 		alureg_t w;
 		LOAD(w, ADDR(isaddr + 1));
-		r = find_by_id((w.l & 01777) << 24 | w.r);
+		r = find_by_id(internal_id((w.l & 01777) << 24 | w.r));
 		if (!r)
 			return ARFA_NO_NAME;
 	} else {
@@ -426,6 +454,8 @@ rights_of(arfa_rec_t *r)
 	for (i = 0; i < ARFA_MAXACL; ++i)
 		if (r->acl[i] && shifr_match(r->acl[i], who))
 			return (r->acl_rights >> (2 * (i + 1))) & 3;
+	if (shifr_match(r->owner, 0x999999))
+		return (r->acl_rights & 3) | 1;
 	return r->acl_rights & 3;
 }
 
@@ -457,40 +487,75 @@ arfa_lookup_id(const uchar *gname, uint user, uint owner, uint *id)
 	else if (r->is_catalog)
 		rc = ARFA_IS_CATALOG;
 	else
-		*id = r->id;
+		*id = user_id(r->id);
 	cat_unlock(0);
 	return rc;
+}
+
+static int
+arfa_attach_region_lun(int lun, arfa_rec_t *r, int write, ushort offset)
+{
+	char path[ARFA_PATH_MAX];
+	void *h;
+
+	if (r->is_catalog)
+		return ARFA_IS_CATALOG;
+	if (rights_of(r) < (write ? 2 : 1))
+		return ARFA_NO_RIGHTS;
+	if (!arfa_resolve(arfa_root, r->name, 0, gost_latin, path))
+		return ARFA_NO_VOLUME;
+	h = disk_open_path(path, write ? DISK_READ_WRITE : DISK_READ_ONLY);
+	if (!h)
+		return ARFA_NO_VOLUME;
+	disks[lun].diskh = h;
+	disks[lun].diskno = 0;
+	disks[lun].offset = offset;
+	disks[lun].mode = write ? DISK_READ_WRITE : DISK_READ_ONLY;
+	lun_id[lun] = r->id;
+	++r->orders;
+	return ARFA_OK;
+}
+
+static int
+arfa_order_region(arfa_rec_t *r, int ro, int *lunp)
+{
+	int i, lun = 0, inuse = 0;
+
+	if (r->is_catalog)
+		return ARFA_IS_CATALOG;
+	if (rights_of(r) < (ro ? 1 : 2))
+		return ARFA_NO_RIGHTS;
+	/* РМР 48-17 рр.: шкала номеров, 48 р. - номер 30b */
+	for (i = 0; i < 040; ++i) {
+		int u = 030 + i;
+		int bit = i < 24 ? (accex.l >> (23 - i)) & 1
+				 : (accex.r >> (23 - (i - 24))) & 1;
+		if (disks[u].diskno || disks[u].diskh || lun_id[u])
+			++inuse;
+		else if (bit && !lun)
+			lun = u;
+	}
+	if (!lun)
+		return ARFA_LUN_BUSY;
+	if (inuse >= ARFA_MAXLUNS)
+		return ARFA_MANY_LUNS;
+	*lunp = lun;
+	return arfa_attach_region_lun(lun, r, !ro, 0);
 }
 
 int
 arfa_attach_lun(int lun, uint id, int write, ushort offset)
 {
-	char path[ARFA_PATH_MAX];
 	arfa_rec_t *r;
-	void *h;
 	int rc = ARFA_OK;
 
 	if (cat_lock() < 0)
 		return ARFA_NO_VOLUME;
-	r = find_by_id(id);
+	r = find_by_id(internal_id(id));
 	if (!r)
 		rc = ARFA_NO_NAME;
-	else if (r->is_catalog)
-		rc = ARFA_IS_CATALOG;
-	else if (write && rights_of(r) < 2)
-		rc = ARFA_NO_RIGHTS;
-	else if (!arfa_resolve(arfa_root, r->name, 0, gost_latin, path))
-		rc = ARFA_NO_VOLUME;
-	else if (!(h = disk_open_path(path, write ? DISK_READ_WRITE : DISK_READ_ONLY)))
-		rc = ARFA_NO_VOLUME;
-	else {
-		disks[lun].diskh = h;
-		disks[lun].diskno = 0;
-		disks[lun].offset = offset;
-		disks[lun].mode = write ? DISK_READ_WRITE : DISK_READ_ONLY;
-		lun_id[lun] = r->id;
-		++r->orders;
-	}
+	else
+		rc = arfa_attach_region_lun(lun, r, write, offset);
 	cat_unlock(rc == ARFA_OK);
 	return rc;
 }
@@ -1057,10 +1122,8 @@ arfa(void)
 		return E_SUCCESS;
 	}
 	case 012: {             /* дозаказ области */
-		char    path[ARFA_PATH_MAX];
 		int     ro = (is.r >> 11) & 1;
-		int     i, lun = 0, inuse = 0;
-		void    *h;
+		int     lun;
 
 		if (cat_lock() < 0)
 			return E_UNIMP;
@@ -1072,52 +1135,12 @@ arfa(void)
 			reg[016] = rc;
 			return E_SUCCESS;
 		}
-		if (r->is_catalog) {
+		rc = arfa_order_region(r, ro, &lun);
+		if (rc) {
 			cat_unlock(0);
-			reg[016] = ARFA_IS_CATALOG;
+			reg[016] = rc;
 			return E_SUCCESS;
 		}
-		if (rights_of(r) < (ro ? 1 : 2)) {
-			cat_unlock(0);
-			reg[016] = ARFA_NO_RIGHTS;
-			return E_SUCCESS;
-		}
-		/* РМР 48-17 рр.: шкала номеров, 48 р. - номер 30b */
-		for (i = 0; i < 040; ++i) {
-			int u = 030 + i;
-			int bit = i < 24 ? (accex.l >> (23 - i)) & 1
-					 : (accex.r >> (23 - (i - 24))) & 1;
-			if (disks[u].diskno || disks[u].diskh || lun_id[u])
-				++inuse;
-			else if (bit && !lun)
-				lun = u;
-		}
-		if (!lun) {
-			cat_unlock(0);
-			reg[016] = ARFA_LUN_BUSY;
-			return E_SUCCESS;
-		}
-		if (inuse >= ARFA_MAXLUNS) {
-			cat_unlock(0);
-			reg[016] = ARFA_MANY_LUNS;
-			return E_SUCCESS;
-		}
-		if (!arfa_resolve(arfa_root, r->name, 0, gost_latin, path))
-			h = NULL;
-		else
-			h = disk_open_path(path,
-				ro ? DISK_READ_ONLY : DISK_READ_WRITE);
-		if (!h) {
-			cat_unlock(0);
-			reg[016] = ARFA_NO_VOLUME;
-			return E_SUCCESS;
-		}
-		disks[lun].diskh = h;
-		disks[lun].diskno = 0;
-		disks[lun].offset = 0;
-		disks[lun].mode = ro ? DISK_READ_ONLY : DISK_READ_WRITE;
-		lun_id[lun] = r->id;
-		++r->orders;
 		acc.l = 0;
 		acc.r = lun;
 		cat_unlock(1);
@@ -1125,6 +1148,7 @@ arfa(void)
 	}
 	case 013: {             /* имя и идентификатор области */
 		ushort  buf = accex.r & 077777;
+		uint    id;
 		int     i;
 
 		if (cat_lock() < 0)
@@ -1137,8 +1161,9 @@ arfa(void)
 			reg[016] = rc;
 			return E_SUCCESS;
 		}
-		acc.l = (r->id >> 24) & 01777;
-		acc.r = r->id & 0xffffff;
+		id = user_id(r->id);
+		acc.l = (id >> 24) & 01777;
+		acc.r = id & 0xffffff;
 		if (buf) {
 			uchar   c[6];
 			int     n = 0;

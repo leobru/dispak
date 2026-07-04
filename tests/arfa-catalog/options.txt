@@ -1,0 +1,1 @@
+--arfa-dir=arfa-catalog-work --arfa-scratch arfa-catalog.b6

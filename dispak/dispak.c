@@ -63,6 +63,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/stat.h>
 #ifdef HAVE_GETOPT_LONG
 #   include <getopt.h>
 #else
@@ -116,6 +120,8 @@ static int      sv_load(void);
 void            pout_dump(char *filename);
 void            stat_out(void);
 static void	drum_dump(int drum_no, char *filename);
+static int	arfa_scratch(const char *path);
+static int	rm_rf(const char *path);
 
 enum {
 	OPT_VERSION,
@@ -135,6 +141,7 @@ enum {
 	OPT_DRUM_DUMP,
 	OPT_SUBTASKS,
 	OPT_ARFA_DIR,
+	OPT_ARFA_SCRATCH,
 };
 
 /* Table of options. */
@@ -169,6 +176,7 @@ static struct option longopts[] = {
 	{ "drum-dump",		1,	0,	OPT_DRUM_DUMP   },
 	{ "subtasks",		0,	0,	OPT_SUBTASKS	},
 	{ "arfa-dir",		1,	0,	OPT_ARFA_DIR	},
+	{ "arfa-scratch",	0,	0,	OPT_ARFA_SCRATCH },
 	{ 0,			0,	0,	0		},
 };
 
@@ -216,6 +224,7 @@ usage ()
 	fprintf (stderr, _("                         as subordinate-task processes\n"));
 	fprintf (stderr, _("  --arfa-dir=dir         directory for АРФА archive regions\n"));
 	fprintf (stderr, _("                         (default ~/.besm6/arfa)\n"));
+	fprintf (stderr, _("  --arfa-scratch         remove --arfa-dir before running\n"));
 
 	exit (1);
 }
@@ -263,6 +272,7 @@ main(int argc, char **argv)
 	char		*baud_end;
 	int		decode_output = 0;
 	int		subtasks = 0;
+	int		arfa_scratch_requested = 0;
 
 	task_argv0 = argv[0];
 
@@ -375,8 +385,13 @@ main(int argc, char **argv)
 		case OPT_ARFA_DIR:
 			arfa_dir = optarg;
 			break;
+		case OPT_ARFA_SCRATCH:
+			arfa_scratch_requested = 1;
+			break;
 		}
 	}
+	if (arfa_scratch_requested && arfa_scratch(arfa_dir) < 0)
+		exit(1);
 	if (bootstrap) {
 		/* silently */
 		xnative = 0;
@@ -484,6 +499,71 @@ main(int argc, char **argv)
 	terminate();
 	ib_cleanup();
 	return (0);
+}
+
+static int
+arfa_scratch(const char *path)
+{
+	if (!path) {
+		fprintf(stderr, _("%s: --arfa-scratch requires --arfa-dir\n"),
+			PACKAGE_NAME);
+		return -1;
+	}
+	if (!*path || !strcmp(path, "/") || !strcmp(path, ".") ||
+	    !strcmp(path, "..")) {
+		fprintf(stderr, _("%s: unsafe --arfa-dir for --arfa-scratch: %s\n"),
+			PACKAGE_NAME, path);
+		return -1;
+	}
+	if (rm_rf(path) < 0) {
+		fprintf(stderr, _("%s: cannot remove --arfa-dir %s: %s\n"),
+			PACKAGE_NAME, path, strerror(errno));
+		return -1;
+	}
+	return 0;
+}
+
+static int
+rm_rf(const char *path)
+{
+	struct stat st;
+
+	if (lstat(path, &st) < 0)
+		return errno == ENOENT ? 0 : -1;
+	if (S_ISDIR(st.st_mode)) {
+		DIR *dir = opendir(path);
+		struct dirent *de;
+
+		if (!dir)
+			return -1;
+		while ((de = readdir(dir)) != NULL) {
+			char *child;
+			size_t len;
+			int rc;
+
+			if (!strcmp(de->d_name, ".") ||
+			    !strcmp(de->d_name, ".."))
+				continue;
+			len = strlen(path) + 1 + strlen(de->d_name) + 1;
+			child = malloc(len);
+			if (!child) {
+				closedir(dir);
+				errno = ENOMEM;
+				return -1;
+			}
+			snprintf(child, len, "%s/%s", path, de->d_name);
+			rc = rm_rf(child);
+			free(child);
+			if (rc < 0) {
+				closedir(dir);
+				return -1;
+			}
+		}
+		if (closedir(dir) < 0)
+			return -1;
+		return rmdir(path);
+	}
+	return unlink(path);
 }
 
 void
