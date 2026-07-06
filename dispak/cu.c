@@ -122,8 +122,18 @@ ulong   run() {
 
 FOREVER
 
-	if (task_reg && task_poll() == E_TERM)
+	if ((task_gla_l | task_gla_r) && !supmode && !task_reg) {
+		task_gla_l = task_gla_r = 0;
+		err = E_MAIN_GONE;
 		STOP;
+	}
+	if (task_reg) {
+		err = task_poll();
+		if (err == E_TERM)
+			STOP;
+		if (err)
+			STOP;
+	}
 
 	if (goahead && !right) {
 		goahead = 0;

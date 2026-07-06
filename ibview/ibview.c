@@ -216,6 +216,9 @@ print_passport(const struct passport *psp)
 	printf("  user:      ");
 	print_user(psp->user);
 	printf("\n");
+	printf("  gla:       ");
+	print_user(psp->glavn);
+	printf("\n");
 	printf("  entry:     %05o\n", psp->entry);
 	printf("  intercept: %05o\n", psp->intercept);
 	printf("  tele:      %u\n", psp->tele);

@@ -407,6 +407,7 @@ extern uint64_t	userid();
 #define E_SQRT		53		/* sqrt(x), x < 0 */
 #define E_ALOG		54		/* log(x), x <= 0 */
 #define E_EXP		55		/* exp(x), x > 44 */
+#define E_MAIN_GONE	60		/* main task is gone */
 #define E_TERM          1               /* normal termination   */
 #define E_MAX           81
 

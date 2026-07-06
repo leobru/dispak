@@ -123,8 +123,9 @@ task_init(int create, int catno)
 		return -1;
 	}
 
-	/* Take a program channel. */
-	for (i = 0; i < TASK_MAXCHAN; ++i)
+	/* Take a program channel.  Top-level tasks use the low channels;
+	 * formed subtasks use the invented execution-channel range. */
+	for (i = env ? TASK_SUBCHAN_FIRST - 1 : 0; i < TASK_MAXCHAN; ++i)
 		if (__sync_bool_compare_and_swap(&task_reg->slot[i].pid,
 		    0, (int) getpid()))
 			break;
@@ -161,6 +162,7 @@ task_init(int create, int catno)
 	install(SIGUSR1, usr1_handler);
 	install(SIGUSR2, usr2_handler);
 	install(SIGCHLD, chld_handler);
+	setvbuf(stdin, NULL, _IONBF, 0);
 	return 0;
 }
 
@@ -335,11 +337,13 @@ task_poll(void)
 	}
 	if ((task_gla_l | task_gla_r) && !supmode) {
 		/* ГЛА: at the first user-code instruction link to the
-		 * master and park; ignored when no task with the given
-		 * шифр is around. */
+		 * master and park.  A nonzero ГЛА names a required master;
+		 * if the шифр is not running, the task is removed. */
 		task_slot_t *m = task_by_shifr(task_gla_l, task_gla_r);
 
 		task_gla_l = task_gla_r = 0;
+		if (!m)
+			return E_MAIN_GONE;
 		if (m && m != t) {
 			t->master = task_channo(m);
 			park_notify = m;

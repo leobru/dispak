@@ -32,7 +32,9 @@ loaded):
 2. exports its path in the `DISPAK_TASK_REG` environment variable, which child
    dispak processes inherit;
 3. occupies a free slot: slot index + 1 is the task's *program channel number*
-   (программный канал), 1..16 (`TASK_MAXCHAN`).
+   (программный канал), 1..057 (`TASK_MAXCHAN`).  Formed subtasks are placed
+   in invented channels starting at 041 octal; these nonzero channel numbers
+   are accepted wherever an `Аисп` channel operand is allowed.
 
 A spawned subtask process finds `DISPAK_TASK_REG` set, so it *attaches* to the
 inherited registry instead of creating one — only the topmost invocation needs
@@ -164,7 +166,7 @@ Own apparatus (э53): 10 time, 11 decoder address, 12 mask, 13/14
 disable/enable, 15 restore state, 16 read scale, 17 wait, 20 read mask,
 21 declare/clear events.
 
-Master's view of a ПЗ (э53, "Аисп" = шифр or channel number on the
+Master's view of a ПЗ (э53, "Аисп" = шифр or nonzero channel number on the
 accumulator): 24 read ПЗ mask, 30 stop, 31 start, 32 declare/clear events in
 ПЗ, 33 end ПЗ, 34 set ПЗ mask, 35 exchange memory pages, 36 read ПЗ scale,
 37 pass a dataset, 40/42 enable/disable async processes in ПЗ, 43 set ПЗ
@@ -176,10 +178,11 @@ Linkage (э53): 25 declare master, 26 detach, 27 appeal, 46 declare + appeal.
 7700 alarm, 7701 form task.
 
 э62: 41 read a ПЗ output stream zone, 44 cancel output stream (Инкогнито),
-46 transfer terminal(s), 54 авост cause of a ПЗ, 61 шифры of own ПЗ,
-63 hide area, 64 event mask of ПЗ-for-ГЗ, 72 transfer ПЗ to a new master,
-77 raise авост in self or a stopped ПЗ, 101 scale of stopped ПЗ,
-102 reset a terminal from input.
+46 transfer terminal(s), 54 авост cause of a ПЗ, 61 шифры of own ПЗ
+(returning the MSB plus their channel scale in the low half: channel 041 is
+0100000), 63 hide area, 64 event mask of ПЗ-for-ГЗ,
+72 transfer ПЗ to a new master, 77 raise авост in self or a stopped ПЗ,
+101 scale of stopped ПЗ, 102 reset a terminal from input.
 
 ## The ГЛА passport option
 

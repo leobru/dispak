@@ -24,7 +24,8 @@
 
 #include "defs.h"
 
-#define TASK_MAXCHAN    16      /* program channels 1..TASK_MAXCHAN */
+#define TASK_MAXCHAN    057     /* program channels 1..TASK_MAXCHAN */
+#define TASK_SUBCHAN_FIRST 041  /* first invented subtask channel */
 
 /* slot states */
 #define TS_FREE         0

@@ -4,23 +4,31 @@ eeв1а3
 *name pz basic
 *no list
 *assembler
+C No task registry is enabled for this test.  Calls that require an
+C existing ПЗ must report "no such subordinate"; self-local event calls
+C and the "my master channel" query must still succeed with zero.
  program: ,name,
+C E53 25 declares a master by шифр; a bogus шифр is not found.
 	  ,xta , badc
 	  ,*53 , 25b
 	  ,atx , res
 	  ,*64 , inf64
+C E53 27 appeals to the master; without one, the task is not subordinate.
 	  ,xta ,
 	  ,*53 , 27b
 	  ,atx , res
 	  ,*64 , inf64
+C E53 30 stop ПЗ; there is no subordinate selected on the accumulator.
 	  ,xta ,
 	  ,*53 , 30b
 	  ,atx , res
 	  ,*64 , inf64
+C E53 36 get/clear ПЗ event scale; again there is no selected ПЗ.
 	  ,xta ,
 	  ,*53 , 36b
 	  ,atx , res
 	  ,*64 , inf64
+C E53 16 and E53 20 are own-task event-mask queries and work without ПЗ.
 	  ,xta ,
 	  ,*53 , 16b
 	  ,atx , res
@@ -29,6 +37,7 @@ eeв1а3
 	  ,*53 , 20b
 	  ,atx , res
 	  ,*64 , inf64
+C E50 207 returns this task's master program channel; top-level task has 0.
 	  ,xta ,
 	  ,*50 , 207b
 	  ,atx , res

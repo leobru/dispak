@@ -4,36 +4,50 @@ eeв1а3
 *name pz gla
 *no list
 *assembler
+C Form a subtask whose passport has ГЛА 419999.  The child links itself
+C to this master at its first user instruction and parks before running
+C its program body, raising the "ПЗ appeared/stopped" event.
  program: ,name,
+C Enable event bits for alarm and "ПЗ appeared", then form the child from
+C the in-memory deck below with E50 7701.
 	  ,xta , mask
 	  ,*53 , 12b
 	 15,vtm, cwrd
 	  ,ita , 15
 	  ,*50 , 7701b
+C Save the stream request word for E62 41.  The catalog number returned in
+C R14 is the child input-buffer number and becomes the stream catalog key.
 	  ,ita , 14
 	  ,asn , 50b
 	  ,aox , strq
 	  ,atx , sreq
+C Wait until E53 16 shows event bit 11 ("ПЗ appeared") set.
  wexp:	  ,*53 , 17b
 	  ,*53 , 16b
 	  ,aax , b11
 	  ,uza , wexp
+C E62 101 reports stopped subtasks; the parked ГЛА child must appear.
 	  ,xta ,
 	  ,*62 , 101b
 	  ,atx , res
 	  ,*64 , inf64
+C E50 206 resolves the child шифр to its program-channel number.
 	  ,xta , pzc
 	  ,*50 , 206b
 	  ,atx , res
 	  ,*64 , inf64
+C E62 54 reports the child's stop cause: stopped by/for the master.
 	  ,xta , pzc
 	  ,*62 , 54b
 	  ,atx , res
 	  ,*64 , inf64
+C E53 31 resumes the child.  It then prints MARK and exits.
 	  ,xta , pzc
 	  ,*53 , 31b
 	  ,atx , res
 	  ,*64 , inf64
+C Wait until E50 206 no longer finds the child, then read its print stream
+C zone through E62 41.  This also checks task_spawn's pzNNN.raw dump path.
  wend:	  ,*53 , 17b
 	  ,xta , pzc
 	  ,*50 , 206b

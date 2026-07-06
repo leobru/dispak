@@ -4,20 +4,28 @@ eeв1а3
 *name pz subtasks
 *no list
 *assembler
+C Form a normal subtask, then exercise the master-side controls backed by
+C tasks.c's shared registry slot: stop/start, events, terminal transfer,
+C task listing, hide/event-mask fields, and stream retrieval after exit.
  program: ,name,
+C Enable event bits for alarm and "ПЗ appeared", then form the child from
+C the in-memory deck below with E50 7701.
 	  ,xta , mask
 	  ,*53 , 12b
 	 15,vtm, cwrd
 	  ,ita , 15
 	  ,*50 , 7701b
+C Save the child stream request word.  R14 holds the input catalog number.
 	  ,ita , 14
 	  ,asn , 50b
 	  ,aox , strq
 	  ,atx , sreq
+C Wait until the subtask has declared this task as master and appealed.
  wexp:	  ,*53 , 17b
 	  ,*53 , 16b
 	  ,aax , b11
 	  ,uza , wexp
+C Stop the child, resolve its program channel, and fetch/clear its events.
 	  ,xta , pzc
 	  ,*53 , 30b
 	  ,atx , res
@@ -30,6 +38,7 @@ eeв1а3
 	  ,*53 , 36b
 	  ,atx , res
 	  ,*64 , inf64
+C Raise event bit 2 in the child, then verify it is visible in E53 36.
 	 13,vtm, evw
 	  ,xta , pzc
 	  ,*53 , 32b
@@ -39,6 +48,7 @@ eeв1а3
 	  ,*53 , 36b
 	  ,atx , res
 	  ,*64 , inf64
+C Query stop cause and stopped-subtask scale for the parked child.
 	  ,xta , pzc
 	  ,*62 , 54b
 	  ,atx , res
@@ -47,26 +57,32 @@ eeв1а3
 	  ,*62 , 101b
 	  ,atx , res
 	  ,*64 , inf64
+C E62 61 lists subordinate task шифры into BUFA and returns the low-half
+C subordinate channel scale.
 	 13,vtm, bufa
 	  ,xta ,
 	  ,*62 , 61b
 	  ,atx , res
 	  ,*64 , inf64
 	  ,*64 , infb
+C E62 63 sets the hidden-area address for the master.
 	 13,vtm, res
 	  ,xta , pzc
 	  ,*62 , 63b
 	  ,atx , res
 	  ,*64 , inf64
+C E62 64 sets the event mask the master records for this child.
 	 13,vtm, evw
 	  ,xta , pzc
 	  ,*62 , 64b
 	  ,atx , res
 	  ,*64 , inf64
-	  ,xta , pzc
+C Resume the child by its invented channel number.
+	  ,xta , exec2
 	  ,*53 , 31b
 	  ,atx , res
 	  ,*64 , inf64
+C Wait for the child to disappear, then retrieve its print stream.
  wend:	  ,*53 , 17b
 	  ,xta , pzc
 	  ,*50 , 206b
@@ -76,11 +92,13 @@ eeв1а3
 	  ,*62 , 41b
 	  ,atx , res
 	  ,*64 , inf64
+C A request for a non-existing stream zone reports no zone.
 	  ,xta , sreq
 	  ,aox , z7777
 	  ,*62 , 41b
 	  ,atx , res
 	  ,*64 , inf64
+C After exit, stopping the former child by шифр must fail.
 	  ,xta , pzc
 	  ,*53 , 30b
 	  ,atx , res
@@ -89,6 +107,7 @@ eeв1а3
  mask:	  ,log , 2001
  b11:	  ,log , 2000 0000 0000
  pzc:	  ,oct , 2031 44
+ exec2:	  ,log , 41
  evw:	  ,log , 2
  strq:	  ,log , 1030000
  z7777:	  ,log , 7777

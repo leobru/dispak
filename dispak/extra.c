@@ -2033,21 +2033,22 @@ e62(void)
 		return E_SUCCESS;
 	case 0054: {	/* get авост cause of a subtask */
 		task_slot_t *pz = task_find_pz();
-		acc.l = 0;
+		acc.l = acc.r = 0;
 		if (!pz) {
-			acc.r = 0;	/* нет ПЗ в решении */
 			return E_SUCCESS;
 		}
-		acc.l = 1 << 23;	/* 48 р. */
-		acc.r = pz->cause == TC_NONE ? 0 : TC_CAUSE_NUM;
+		if (pz->cause != TC_NONE) {
+			acc.l = 1 << 23;	/* 48 р. */
+			acc.r = TC_CAUSE_NUM;
+		}
 		return E_SUCCESS;
 	}
 	case 061: {	/* get task codes (шифры) of subordinate tasks:
 			 * СМ = 0 - own, or шифр/канал of the queried task;
 			 * М15 - address of the output array for the шифры,
 			 * one per word in channel order.  The answer is 0 when
-			 * there are no ПЗ, otherwise the MSB ored with
-			 * (MSB >> nchan) for every ПЗ listed in the buffer. */
+			 * there are no ПЗ, otherwise the MSB plus the low-half
+			 * channel scale: channel 041 is 0100000. */
 		int chan = task_chan, i;
 		uint scale = 0;
 		ushort addr = reg[015];
@@ -2065,8 +2066,8 @@ e62(void)
 			return E_SUCCESS;
 		for (i = 0; i < TASK_MAXCHAN; ++i) {
 			task_slot_t *s = &task_reg->slot[i];
-			if (s->pid && s->master == chan)
-				scale |= (1 << 23) >> (i + 1);
+			if (s->pid && s->master == chan && i + 1 >= TASK_SUBCHAN_FIRST)
+				scale |= 1 << (TASK_MAXCHAN - i);
 		}
 		if (!scale)
 			return E_SUCCESS;
@@ -2083,7 +2084,8 @@ e62(void)
 				addr = ADDR(addr + 1);
 			}
 		}
-		acc.l = 1 << 23 | scale;
+		acc.l = 1 << 23;
+		acc.r = scale;
 		return E_SUCCESS;
 	}
 	case 0063: {	/* set hide area of the subtask for the master */
@@ -2189,8 +2191,9 @@ e62(void)
 			return E_SUCCESS;
 		for (i = 0; i < TASK_MAXCHAN; ++i) {
 			task_slot_t *s = &task_reg->slot[i];
-			if (s->pid && s->master == chan && s->state == TS_STOPPED)
-				acc.l |= 1 << (23 - i);	/* 48 р. = канал 1 */
+			if (s->pid && s->master == chan && s->state == TS_STOPPED &&
+			    i + 1 >= TASK_SUBCHAN_FIRST)
+				acc.r |= 1 << (TASK_MAXCHAN - i);
 		}
 		return E_SUCCESS;
 	}
