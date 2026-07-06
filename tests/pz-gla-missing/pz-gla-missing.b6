@@ -1,0 +1,23 @@
+шифр 419900 зс5^
+гла 419998^
+лен 41(2048)^
+eeв1а3
+*name pz gla missing
+*NO LIST
+*ASSEM
+C A nonzero ГЛА names a required running master task.  Since no task
+C with шифр 419998 exists, user code must not run; the monitor should
+C terminate with error 60, "СНЯЛАСЬ  ГЛАВНАЯ".
+ program: ,name,
+	  ,*64 , info
+	  ,call, stop*
+ mark:	  ,oct , 5252 5252
+ info:	  ,    , mark
+	  ,    , mark
+	 2,    , 20b
+	 8,    ,
+	  ,end ,
+*execute
+*end file
+``````
+еконец

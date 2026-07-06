@@ -178,6 +178,22 @@ static wchar_t cell_wchar(const cell_t *cell)
 	return (wchar_t) ch;
 }
 
+static void draw_cell(int row, int col)
+{
+	cell_t *cell = &screen_cells[row][col];
+	wchar_t ch = cell_wchar(cell);
+	cchar_t cc;
+	attr_t attr = A_NORMAL;
+	int cursor = row == cursor_row && col == cursor_col;
+
+	if (cursor)
+		attr |= A_UNDERLINE;
+	if (cell->ctrl != CTRL_NONE && ctrl_blink)
+		attr |= A_DIM | A_BLINK;
+	setcchar(&cc, &ch, attr, 0, NULL);
+	mvadd_wch(host_row_for(row), screen_left + 1 + col, &cc);
+}
+
 static void draw_buttons(void)
 {
 	int i;
@@ -233,23 +249,14 @@ static void draw_screen(void)
 	}
 	for (row = 0; row < VT_ROWS; ++row) {
 		int y = host_row_for(row);
-		wchar_t linebuf[VT_COLS + 1];
 
 		mvhline(y, left + 1, ' ', VT_COLS);
 		for (col = 0; col < VT_COLS; ++col)
-			linebuf[col] = cell_wchar(&screen_cells[row][col]);
-		linebuf[VT_COLS] = 0;
-		mvaddnwstr(y, left + 1, linebuf, VT_COLS);
-		if (ctrl_blink) {
-			for (col = 0; col < VT_COLS; ++col)
-				if (screen_cells[row][col].ctrl != CTRL_NONE)
-					mvchgat(y, left + 1 + col, 1, A_DIM | A_BLINK, 0, NULL);
-		}
+			draw_cell(row, col);
 		if (y + 1 < bottom)
 			mvhline(y + 1, left + 1, ' ', VT_COLS);
 	}
 	draw_buttons();
-	move(host_row_for(cursor_row), left + 1 + cursor_col);
 	refresh();
 }
 
@@ -593,7 +600,7 @@ vt340_curses_init(void)
 	keypad(stdscr, TRUE);
 	meta(stdscr, TRUE);
 	nonl();
-	curs_set(1);
+	curs_set(0);
 	for (row = 0; row < VT_ROWS; ++row)
 		clear_line(row);
 	home_screen();

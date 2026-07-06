@@ -8,8 +8,8 @@ C Form a normal subtask, then exercise the master-side controls backed by
 C tasks.c's shared registry slot: stop/start, events, terminal transfer,
 C task listing, hide/event-mask fields, and stream retrieval after exit.
  program: ,name,
-C Enable event bits for alarm and "ПЗ appeared", then form the child from
-C the in-memory deck below with E50 7701.
+C Enable event bits for alarm, "ПЗ stopped", and "ПЗ appeared", then form
+C the child from the in-memory deck below with E50 7701.
 	  ,xta , mask
 	  ,*53 , 12b
 	 15,vtm, cwrd
@@ -82,12 +82,20 @@ C Resume the child by its invented channel number.
 	  ,*53 , 31b
 	  ,atx , res
 	  ,*64 , inf64
-C Wait for the child to disappear, then retrieve its print stream.
+C Wait for the child to terminate.  The retained stopped slot remains
+C visible until the master explicitly frees it.
  wend:	  ,*53 , 17b
+	  ,*53 , 16b
+	  ,aax , b9
+	  ,uza , wend
 	  ,xta , pzc
-	  ,*50 , 206b
-	  ,aox ,
-	  ,u1a , wend
+	  ,*62 , 54b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta , pzc
+	  ,*53 , 33b
+	  ,atx , res
+	  ,*64 , inf64
 	  ,xta , sreq
 	  ,*62 , 41b
 	  ,atx , res
@@ -104,7 +112,8 @@ C After exit, stopping the former child by шифр must fail.
 	  ,atx , res
 	  ,*64 , inf64
 	  ,call, stop*
- mask:	  ,log , 2001
+ mask:	  ,log , 2401
+ b9:	  ,log , 400 0000 0000
  b11:	  ,log , 2000 0000 0000
  pzc:	  ,oct , 2031 44
  exec2:	  ,log , 41

@@ -38,13 +38,15 @@
 #define TC_NONE         0
 #define TC_BY_MASTER    1       /* остановлена главной */
 #define TC_APPEAL       2       /* обратилась к главной */
+#define TC_TERMINATED   3       /* ПЗ снялась */
 
-/* авост cause number reported for a task stopped by/appealing to the
- * master (э62 54): 67 = ЗАДАЧА УПРЯТАНА, see errtxt.c */
-#define TC_CAUSE_NUM    67
+/* авост cause numbers reported by э62 54 */
+#define TC_CAUSE_PZ_APPEARED    0177    /* появилась/остановлена ПЗ */
 
 /* event scale bits (N р. шкалы событий -> 1 << (N-1)) */
 #define EVENT_ALARM         (1 << 0)    /* будильник, 1 р. */
+#define EVENT_OUTPUT        (1 << 3)    /* готов поток вывода, 4 р. */
+#define EVENT_PZ_STOPPED    (1 << 8)    /* ПЗ остановлена, 9 р. */
 #define EVENT_PZ_APPEARED   (1 << 10)   /* появилась/отключилась ПЗ, 11 р. */
 #define EVENT_RESOURCE      (1 << 11)   /* доверение ресурса, 12 р. */
 #define EVENT_ACCIDENT      (1 << 16)   /* авария, 17 р. */
@@ -59,6 +61,7 @@ typedef struct {
 	volatile int    catno;          /* number in the input catalog */
 	volatile int    state;          /* TS_* */
 	volatile int    cause;          /* TC_*, valid while stopped */
+	volatile int    term_cause;     /* actual termination code, for TC_TERMINATED */
 	volatile int    master;         /* program channel of the master or 0 */
 	volatile int    inpause;        /* the task is sleeping in э50 7700/э53 17 */
 	volatile int    cancel_pause;   /* э53 47: cancel pause/alarm */

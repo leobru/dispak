@@ -8,8 +8,8 @@ C Form a subtask whose passport has ГЛА 419999.  The child links itself
 C to this master at its first user instruction and parks before running
 C its program body, raising the "ПЗ appeared/stopped" event.
  program: ,name,
-C Enable event bits for alarm and "ПЗ appeared", then form the child from
-C the in-memory deck below with E50 7701.
+C Enable event bits for alarm, "ПЗ stopped", and "ПЗ appeared", then form
+C the child from the in-memory deck below with E50 7701.
 	  ,xta , mask
 	  ,*53 , 12b
 	 15,vtm, cwrd
@@ -46,19 +46,31 @@ C E53 31 resumes the child.  It then prints MARK and exits.
 	  ,*53 , 31b
 	  ,atx , res
 	  ,*64 , inf64
-C Wait until E50 206 no longer finds the child, then read its print stream
-C zone through E62 41.  This also checks task_spawn's pzNNN.raw dump path.
+C Wait until the child terminates.  The slot remains visible until the
+C master explicitly frees it, so do not wait for E50 206 disappearance.
  wend:	  ,*53 , 17b
+	  ,*53 , 16b
+	  ,aax , b9
+	  ,uza , wend
+C E62 54 reports the child's actual termination cause; E53 33 then frees
+C the retained terminated slot.
 	  ,xta , pzc
-	  ,*50 , 206b
-	  ,aox ,
-	  ,u1a , wend
+	  ,*62 , 54b
+	  ,atx , res
+	  ,*64 , inf64
+	  ,xta , pzc
+	  ,*53 , 33b
+	  ,atx , res
+	  ,*64 , inf64
+C Read the child print-stream zone through E62 41.  This also checks
+C task_spawn's pzNNN.raw dump path.
 	  ,xta , sreq
 	  ,*62 , 41b
 	  ,atx , res
 	  ,*64 , inf64
 	  ,call, stop*
- mask:	  ,log , 2001
+ mask:	  ,log , 2401
+ b9:	  ,log , 400 0000 0000
  b11:	  ,log , 2000 0000 0000
  pzc:	  ,oct , 2031 44
  strq:	  ,log , 1030000

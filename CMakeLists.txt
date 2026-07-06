@@ -30,7 +30,7 @@ execute_process(
 #
 add_subdirectory(dispak)
 add_subdirectory(besmtool)
-add_subdirectory(disbesm6)
+# add_subdirectory(disbesm6)
 add_subdirectory(ibview)
 
 #

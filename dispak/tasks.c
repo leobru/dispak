@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include "defs.h"
 #include "disk.h"
@@ -34,6 +35,19 @@ static task_slot_t *park_notify; /* raise "появилась ПЗ" here only af
 				  * the own state is published (ГЛА) */
 static volatile sig_atomic_t    doorbell;
 static volatile sig_atomic_t    childexit;
+
+static uint
+task_term_events(task_slot_t *t)
+{
+	char    rawname[32];
+	struct stat st;
+	uint    ev = EVENT_PZ_STOPPED;
+
+	sprintf(rawname, "pz%03o.raw", t->catno);
+	if (stat(rawname, &st) == 0 && st.st_size > 0)
+		ev |= EVENT_OUTPUT;
+	return ev;
+}
 
 static void
 usr1_handler(int sig)
@@ -141,6 +155,7 @@ task_init(int create, int catno)
 	t->shifr_r = user.r;
 	t->catno = catno;
 	t->cause = TC_NONE;
+	t->term_cause = 0;
 	t->master = 0;
 	t->inpause = t->cancel_pause = 0;
 	t->hide = 0;
@@ -179,6 +194,13 @@ task_cleanup(void)
 	for (i = 0; i < TASK_MAXCHAN; ++i) {
 		task_slot_t *s = &task_reg->slot[i];
 		if (s->pid && s->master == task_chan) {
+			if (s->state == TS_STOPPED && s->cause == TC_TERMINATED) {
+				s->pid = 0;
+				s->state = TS_FREE;
+				s->cause = TC_NONE;
+				s->term_cause = 0;
+				continue;
+			}
 			s->master = 0;
 			s->state = TS_END_REQ;
 			task_kick(s);
@@ -187,8 +209,14 @@ task_cleanup(void)
 	/* Tell the master we are gone. */
 	if (t->master) {
 		task_slot_t *m = &task_reg->slot[t->master - 1];
+		t->cause = TC_TERMINATED;
+		t->term_cause = lasterr ? lasterr : E_TERM;
+		t->state = TS_STOPPED;
 		if (m->pid)
-			task_raise(m, EVENT_PZ_APPEARED);
+			task_raise(m, task_term_events(t));
+		munmap((void*) task_reg, sizeof(task_reg_t));
+		task_reg = NULL;
+		return;
 	}
 	t->pid = 0;
 	t->state = TS_FREE;
@@ -243,12 +271,30 @@ task_reap(void)
 		for (i = 0; i < TASK_MAXCHAN; ++i) {
 			task_slot_t *t = &task_reg->slot[i];
 			if (t->pid == pid) {
-				/* Died without releasing the slot. */
-				t->pid = 0;
-				t->state = TS_FREE;
+				if (t->state == TS_STOPPED &&
+				    t->cause == TC_TERMINATED) {
+					task_slot_t *m = t->master ?
+						&task_reg->slot[t->master - 1] : NULL;
+					if (m && m->pid)
+						task_raise(m, task_term_events(t));
+				} else {
+					/* Died without releasing the slot. */
+					t->cause = TC_TERMINATED;
+					t->term_cause = lasterr ? lasterr : E_TERM;
+					t->state = TS_STOPPED;
+					if (t->master &&
+					    task_reg->slot[t->master - 1].pid)
+						task_raise(&task_reg->slot[t->master - 1],
+						    task_term_events(t));
+					else {
+						t->pid = 0;
+						t->state = TS_FREE;
+						t->cause = TC_NONE;
+						t->term_cause = 0;
+					}
+				}
 			}
 		}
-		(void) eraise(EVENT_PZ_APPEARED);
 	}
 }
 

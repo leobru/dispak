@@ -947,6 +947,8 @@ e53(void)
 		acc.l = 0;
 		if (!pz)
 			acc.r = 1;
+		else if (pz->cause == TC_TERMINATED)
+			acc.r = 1;
 		else if (pz->state != TS_STOPPED)
 			acc.r = 4;	/* ПЗ не остановлена */
 		else {
@@ -985,6 +987,14 @@ e53(void)
 		}
 		if (pz->state != TS_STOPPED) {
 			acc.r = 4;	/* ПЗ не остановлена */
+			return E_SUCCESS;
+		}
+		if (pz->cause == TC_TERMINATED) {
+			pz->pid = 0;
+			pz->state = TS_FREE;
+			pz->cause = TC_NONE;
+			pz->term_cause = 0;
+			acc.r = 0;
 			return E_SUCCESS;
 		}
 		pid = pz->pid;
@@ -1792,11 +1802,22 @@ e50(void)
 		return E_SUCCESS;
 	case 0137:	/* undocumented */
 		return E_SUCCESS;
-	case 0151:	/* input queue position per CPU channel */
-		if (acc.l != 0 || acc.r != 0)
-			return E_UNIMP;
-		acc.r = 0123;	/* arbitrary */
+	case 0151: {	/* input queue position per CPU channel */
+		/* The channel is given in the 6-1 рр. (0 = own task);
+		 * the catalog number is returned in the 48-41 рр., where
+		 * DIMIP reads it, despite the manual saying 8-1 рр. */
+		int chan = acc.r & 077;
+		int catno = 0;
+		if (!task_reg)
+			catno = chan == 0 ? 0123 : 0;	/* arbitrary */
+		else if (chan == 0)
+			catno = task_self()->catno;
+		else if (chan <= TASK_MAXCHAN && task_reg->slot[chan-1].pid)
+			catno = task_reg->slot[chan-1].catno;
+		acc.l = (catno & 0377) << 16;
+		acc.r = 0;
 		return E_SUCCESS;
+	}
 	case 0156: { /* get volume type */
 		int i = disks[(acc.r >> 12) & 077].diskno;
 		acc.l = 0;
@@ -2037,9 +2058,12 @@ e62(void)
 		if (!pz) {
 			return E_SUCCESS;
 		}
-		if (pz->cause != TC_NONE) {
+		if (pz->cause == TC_TERMINATED) {
 			acc.l = 1 << 23;	/* 48 р. */
-			acc.r = TC_CAUSE_NUM;
+			acc.r = pz->term_cause;
+		} else if (pz->cause != TC_NONE) {
+			acc.l = 1 << 23;	/* 48 р. */
+			acc.r = TC_CAUSE_PZ_APPEARED;
 		}
 		return E_SUCCESS;
 	}
@@ -2166,6 +2190,10 @@ e62(void)
 		}
 		if (pz->state != TS_STOPPED) {
 			acc.r = 3;	/* ПЗ не остановлена */
+			return E_SUCCESS;
+		}
+		if (pz->cause == TC_TERMINATED) {
+			acc.r = 077777;
 			return E_SUCCESS;
 		}
 		pid = pz->pid;

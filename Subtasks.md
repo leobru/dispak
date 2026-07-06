@@ -137,7 +137,9 @@ The relation is declared by the subordinate, or transferred by the master:
 - **ГЛА passport option** — static declaration at task start (see below).
 
 A stopped-by-master or appealing task reports авост cause 67 «ЗАДАЧА
-УПРЯТАНА» (э62 54).
+УПРЯТАНА» (э62 54).  A terminated subtask remains visible to its master as a
+stopped ПЗ until the master explicitly ends it; it raises event 9 «ПЗ
+остановлена» and э62 54 reports the subtask's actual termination code.
 
 ## Event apparatus
 
@@ -151,6 +153,8 @@ Bits used by the subordinate-task apparatus (N р. шкалы = `1 << (N-1)`):
 | bit | р. | meaning |
 |-----|----|---------|
 | `EVENT_ALARM` (1<<0) | 1 | будильник (э50 7700, э53 17) |
+| `EVENT_OUTPUT` (1<<3) | 4 | готов поток вывода |
+| `EVENT_PZ_STOPPED` (1<<8) | 9 | ПЗ остановлена |
 | `EVENT_PZ_APPEARED` (1<<10) | 11 | появилась/отключилась ПЗ |
 | `EVENT_RESOURCE` (1<<11) | 12 | доверение ресурса (э53 35/37) |
 | `EVENT_ACCIDENT` (1<<16) | 17 | авария |
