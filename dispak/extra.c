@@ -2610,6 +2610,10 @@ stdio_ttout(uchar flags, ushort a1, ushort a2)
 			/* home */
 			fputs("\033[H", stdout);
 			break;
+                case 0375:
+			/* ^C */
+			fputs("\033[2mC\033[22m", stdout);
+			break;
 		case 021:
 			if (flags == 0220) {
 				/* up arrow is end of text for op. console */

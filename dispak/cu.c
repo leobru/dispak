@@ -226,13 +226,14 @@ dbg:
 	if (covflg) {
 		if (abpc == 01000 && abright == 0)
 			memset(covmap, 0, sizeof(covmap));
-		covmap[abpc] |= 1 << abright;
+		if (!supmode)
+                        covmap[abpc] |= 1 << abright;
 	}
 
 	if (trace >= 2) {
 		char str [40] = "";
 		LOAD(enreg, XADDR(addr + reg[ui.i_reg]));
-		fprintf(stderr, "%05o: %-4s", abpc, op.o_name);
+		fprintf(stderr, "%05o%c %-4s", abpc,  supmode ? ';' : ':', op.o_name);
 		if (addr >= 077700) {
 			if (ui.i_reg)
 				sprintf (str, "-%o(%o)", (addr ^ 077777) + 1, ui.i_reg);
@@ -262,16 +263,16 @@ dbg:
 	case I_ATX:
 		STORE(acc, XADDR(addr + reg[ui.i_reg]));
 		if (trace >= 2)
-			fprintf(stderr, "       %05o: store %08o%08o\n",
-				XADDR(addr + reg[ui.i_reg]), acc.l, acc.r);
+			fprintf(stderr, "       %05o%c store %08o%08o\n",
+				XADDR(addr + reg[ui.i_reg]), supmode ? ';' : ':', acc.l, acc.r);
 		if (!addr && (ui.i_reg == STACKREG))
 			reg[STACKREG] = ADDR(reg[STACKREG] + 1);
 		NEXT;
 	case I_STX:
 		STORE(acc, XADDR(addr + reg[ui.i_reg]));
 		if (trace >= 2)
-			fprintf(stderr, "       %05o: store %08o%08o\n",
-				XADDR(addr + reg[ui.i_reg]), acc.l, acc.r);
+			fprintf(stderr, "       %05o%c store %08o%08o\n",
+				XADDR(addr + reg[ui.i_reg]),  supmode ? ';' : ':', acc.l, acc.r);
 		STK_POP;
 		break;
 	case I_XTS: /* Major ISA change: swapping next 2 lines */
@@ -549,8 +550,8 @@ mtj:
 		if (trace == 1 && (ui.i_opcode != 075 || reg[016] < 2)) {
 			/* Do not trace e75, it's too verbose. */
 			LOAD(enreg, reg[016] | (supmode & sup_mmap));
-			fprintf(stderr, "%05o: %-4s%-5o (=%08o%08o) acc=%08o%08o\n",
-				abpc, op.o_name, reg[016], (uint)enreg.l, (uint)enreg.r,
+			fprintf(stderr, "%05o%c %-4s%-5o (=%08o%08o) acc=%08o%08o\n",
+				abpc,  supmode ? ';' : ':', op.o_name, reg[016], (uint)enreg.l, (uint)enreg.r,
 				(uint)acc.l, (uint)acc.r);
 			fflush(stderr);
 		}
