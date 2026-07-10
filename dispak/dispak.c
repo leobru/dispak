@@ -56,6 +56,8 @@
  *		run in user mode only to build 2099 (no E66, cannot use -x)
  *	--no-insn-check
  *		the only non-insn word is at addr 0
+ *	--coverage=file
+ *		print PC coverage map to file at exit
  *	--drum-dump=file
  *		output contents of drum 27 to file
  */
@@ -172,7 +174,7 @@ static struct option longopts[] = {
 	{ "no-insn-check",	0,	0,	OPT_NO_INSN_CHECK },
 	{ "vt340-curses",	2,	0,	'V'		},
 	{ "725",		0,	0,	OPT_725         },
-	{ "coverage",		0,	0,	OPT_COVERAGE    },
+	{ "coverage",		1,	0,	OPT_COVERAGE    },
 	{ "drum-dump",		1,	0,	OPT_DRUM_DUMP   },
 	{ "subtasks",		0,	0,	OPT_SUBTASKS	},
 	{ "arfa-dir",		1,	0,	OPT_ARFA_DIR	},
@@ -218,7 +220,7 @@ usage ()
 	fprintf (stderr, _("                         use curses-based Videoton-340 console for TELE tasks\n"));
 	fprintf (stderr, _("                         optionally pace output at baud/10 chars per second\n"));
 	fprintf (stderr, _("  --725                  emulate 7.25 MB disk geometry\n"));
-	fprintf (stderr, _("  --coverage             print PC coverage map at exit\n"));
+	fprintf (stderr, _("  --coverage=file        print PC coverage map to file at exit\n"));
 	fprintf (stderr, _("  --drum-dump=file       output drum 27 to file\n"));
 	fprintf (stderr, _("  --subtasks             run tasks formed by extracode 050 7701\n"));
 	fprintf (stderr, _("                         as subordinate-task processes\n"));
@@ -375,6 +377,7 @@ main(int argc, char **argv)
 			break;
 		case OPT_COVERAGE:
 			covflg = 1;
+			cov_file = optarg;
 			break;
 		case OPT_DRUM_DUMP:
 			drum_dump_filename = optarg;

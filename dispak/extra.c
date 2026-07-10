@@ -2204,6 +2204,10 @@ e62(void)
 		acc.r = 077777;
 		return E_SUCCESS;
 	}
+        case 0100: {    /* operator command */
+                fprintf(stderr, "E62 100: ACC = %08o %08o M15 = %05o\n", acc.l, acc.r, reg[015]);
+                return E_SUCCESS;
+        }
 	case 0101: {	/* get the scale of stopped subtasks */
 		int chan = task_chan, i;
 		if (task_reg && (acc.l | acc.r)) {
@@ -2889,9 +2893,9 @@ oporos:
 					ADDR(reg[uir.i_reg] + uir.i_addr));
 			return E_SUCCESS;
 		default:
-			if (uil.i_opcode == 010) {      /* punchcards */
-				return punch(ADDR(reg[uil.i_reg] + uil.i_addr),
-				 ADDR(reg[uir.i_reg] + uir.i_addr));
+			if ((uil.i_opcode >> 3) == 1) {      /* punchcards */
+				return punch(ADDR(reg[uil.i_reg] + uil.i_addr + ((uil.i_opcode & 7) << 12)),
+				 ADDR(reg[uir.i_reg] + uir.i_addr + ((uir.i_opcode & 7) << 12)));
 			}
 printf ("e71: unknown op %#o\n", uil.i_opcode);
 			return E_UNIMP;

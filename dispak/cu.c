@@ -899,15 +899,24 @@ ENDFOREVER
 	if (pout_enable && xnative)
 		pout_decode(pout_file);
 	if (covflg) {
+		FILE *covfp;
+
+		covfp = fopen(cov_file, "w");
+		if (!covfp) {
+			perror(cov_file);
+			goto coverage_done;
+		}
 		for (i = 01000; i < 32768; ++i) {
 			if (covmap[i])
-				printf("%05o: %c%c\n", i,
+				fprintf(covfp, "%05o: %c%c\n", i,
 				    covmap[i] & 1 ? 'L' : ' ',
 				    covmap[i] & 2 ? 'R' : ' ');
 			else
-				printf("%05o: --\n", i);
+				fprintf(covfp, "%05o: --\n", i);
 		}
+		fclose(covfp);
 	}
+coverage_done:
 	pc = abpc;
 	right = abright;
 	pcm_dbg = pcm;
