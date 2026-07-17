@@ -622,8 +622,8 @@ print_real(ushort addr0, ushort addr1, uchar *line, int pos,
  *
  * The information array has the following format
  * - First word:
- *   iiii ........ xxxxxxxxxxxx
- *   jjjj ........ yyyyyyyyyyyy
+ *   iiii ..... xxxxxxxxxxxxxxx
+ *   jjjj ..... yyyyyyyyyyyyyyy
  * - Other words:
  *   ffff bbbbbbbb dddddddddddd
  *   esss wwwwwwww rrrrrrrrrrrr
@@ -1808,10 +1808,10 @@ e50(void)
 		 * DIMIP reads it, despite the manual saying 8-1 рр. */
 		int chan = acc.r & 077;
 		int catno = 0;
-		if (!task_reg)
-			catno = chan == 0 ? 0123 : 0;	/* arbitrary */
-		else if (chan == 0)
-			catno = task_self()->catno;
+		if (chan == 0)
+			catno = 0; // not task_self()->catno; for native E62 41
+		else if (!task_reg)
+			catno = 0123;	/* arbitrary */
 		else if (chan <= TASK_MAXCHAN && task_reg->slot[chan-1].pid)
 			catno = task_reg->slot[chan-1].catno;
 		acc.l = (catno & 0377) << 16;
@@ -1926,6 +1926,18 @@ e50(void)
 		acc.l = 0;
 		acc.r = reg[016] = pc;
 		return E_SUCCESS;
+	case 07710: {
+		int i;
+
+		if (acc.l != 077777777)
+			return E_UNIMP;
+                printf("4 words: <");
+		for (i = 0; i < 4; ++i)
+			gost_write(core[ADDR(acc.r + i)].w_b, 6, stdout);
+                printf(">\n");
+		fflush(stdout);
+		return E_SUCCESS;
+	}
 	default:
 		fprintf(stderr, "E50 %04o\n", reg[016]);
 		return E_UNIMP;
