@@ -1854,7 +1854,7 @@ e50(void)
 			int             arfa_err;
 
 			arfa_err = acc.l & 040000000;
-			n = ((uint64_t) (acc.l & 037777777) << 24) | acc.r;
+			n = acc.r & 0177;
 			if (arfa_err)
 				msg = arfa_msg(n > ARFA_MAX_MSG ? 0 : n);
 			else
