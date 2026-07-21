@@ -66,6 +66,14 @@ _abort(int err)
 	if (!addr && (ui.i_reg == STACKREG)) {   \
 		reg[STACKREG] = ADDR(reg[STACKREG] - 1);        \
 	}
+#define CHECK_OP_READ(eff)  {\
+		if (debug_check_read(XADDR(eff)))\
+			NEXT;\
+}
+#define CHECK_OP_WRITE(eff)  {\
+		if (debug_check_write(XADDR(eff)))\
+			NEXT;\
+}
 #define GET_OP  {\
 		LOAD(enreg, XADDR(addr + reg[ui.i_reg]));\
 		if (op.o_flags & F_AR) {\
@@ -76,6 +84,11 @@ _abort(int err)
 			UNPCK(enreg);\
 		}\
 }
+#define GET_OP_STACKED  {\
+		CHECK_OP_READ(addr + reg[ui.i_reg]);\
+		CHK_STACK;\
+		GET_OP;\
+}
 #define GET_NAI_OP      {\
 	enreg.o = (addr + reg[ui.i_reg]) & 0x7f;\
 	enreg.ml = enreg.mr = 0;\
@@ -85,12 +98,15 @@ _abort(int err)
 	};\
 }
 #define STK_PUSH        {\
-	STORE(acc, reg[STACKREG] | (supmode & sup_mmap));\
+	CHECK_OP_WRITE(reg[STACKREG]);\
+	STORE(acc, XADDR(reg[STACKREG]));\
 	reg[STACKREG] = ADDR(reg[STACKREG] + 1);\
 }
+// the order of check and decrement is the same as in GET_OP_STACKED
 #define STK_POP         {\
+	CHECK_OP_READ(reg[STACKREG]);\
 	reg[STACKREG] = ADDR(reg[STACKREG] - 1);\
-	LOAD(acc, reg[STACKREG] | (supmode & sup_mmap));\
+	LOAD(acc, XADDR(reg[STACKREG]));\
 }
 
 static inline uint64_t
@@ -183,6 +199,9 @@ FOREVER
 	nextpc = ADDR(pc + 1);
 	pcm = pc | supmode;
 
+	if (!right && debug_check_fetch(ADDR(pcm)))
+		NEXT;
+
 	cf = cflags[pcm];
 	if (!(cf & C_UNPACKED) && !right)
 		unpack(pcm);
@@ -261,6 +280,7 @@ dbg:
 
 	switch (op.o_inline) {
 	case I_ATX:
+		CHECK_OP_WRITE(addr + reg[ui.i_reg]);
 		STORE(acc, XADDR(addr + reg[ui.i_reg]));
 		if (trace >= 2)
 			fprintf(stderr, "       %05o%c store %08o%08o\n",
@@ -269,20 +289,21 @@ dbg:
 			reg[STACKREG] = ADDR(reg[STACKREG] + 1);
 		NEXT;
 	case I_STX:
+		CHECK_OP_WRITE(addr + reg[ui.i_reg]);
 		STORE(acc, XADDR(addr + reg[ui.i_reg]));
 		if (trace >= 2)
 			fprintf(stderr, "       %05o%c store %08o%08o\n",
 				XADDR(addr + reg[ui.i_reg]),  supmode ? ';' : ':', acc.l, acc.r);
 		STK_POP;
 		break;
-	case I_XTS: /* Major ISA change: swapping next 2 lines */
+	case I_XTS:
+		CHECK_OP_READ(addr + reg[ui.i_reg]);
 		STK_PUSH;
 		GET_OP;
 		acc = enreg;
 		break;
 	case I_XTA:
-		CHK_STACK;
-		GET_OP;
+		GET_OP_STACKED;
 		acc = enreg;
 		break;
 	case I_VTM:
@@ -329,8 +350,7 @@ dbg:
 		acc.r = reg[(addr + reg[ui.i_reg]) & (supmode ? 0x1f : 0xf)];
 		break;
 	case I_XTR:
-		CHK_STACK;
-		GET_OP;
+		GET_OP_STACKED;
 set_mode:
 		dis_exc = (enreg.o & 040) != 0;
 		G_ADD = (enreg.o & 020) != 0;
@@ -361,8 +381,7 @@ set_mode:
 		acc.r = 0;
 		break;
 	case I_ASUB:
-		CHK_STACK;
-		GET_OP;
+		GET_OP_STACKED;
 		if (NEGATIVE(acc))
 			NEGATE(&acc);
 		if (!NEGATIVE(enreg))
@@ -372,24 +391,21 @@ set_mode:
 			ABORT(err);
 		break;
 	case I_RSUB:
-		CHK_STACK;
-		GET_OP;
+		GET_OP_STACKED;
 		NEGATE(&acc);
 		err = add();
 		if (err)
 			ABORT(err);
 		break;
 	case I_SUB:
-		CHK_STACK;
-		GET_OP;
+		GET_OP_STACKED;
 		NEGATE(&enreg);
 		err = add();
 		if (err)
 			ABORT(err);
 		break;
 	case I_ADD:
-		CHK_STACK;
-		GET_OP;
+		GET_OP_STACKED;
 		err = add();
 		if (err)
 			ABORT(err);
@@ -444,8 +460,7 @@ set_mode:
 		addrmod = 1;
 		NEXT;
 	case I_WTC:
-		CHK_STACK;
-		GET_OP;
+		GET_OP_STACKED;
 		reg[MODREG] = ADDR(enreg.r);
 		addrmod = 1;
 		NEXT;
@@ -480,9 +495,10 @@ set_mode:
 
 		reg[rg] = ad;
 		reg[0] = 0;
+	        CHECK_OP_READ(reg[STACKREG]);
 		if (rg != STACKREG)
 			reg[STACKREG] = ADDR(reg[STACKREG] - 1);
-		LOAD(acc, reg[STACKREG] | (supmode & sup_mmap));
+		LOAD(acc, XADDR(reg[STACKREG]));
 		if (rg == PSREG)
 			sup_mmap = (reg[PSREG] & 1) << 15;
 		break;
@@ -680,6 +696,9 @@ errchk:
 		startwatch();
 		NEXT;
 	default:
+		if (op.o_flags & F_OP)
+			CHECK_OP_READ(addr + reg[ui.i_reg]);
+
 		if (!addr && (ui.i_reg == STACKREG) && (op.o_flags & F_STACK))
 			reg[STACKREG] = ADDR(reg[STACKREG] - 1);
 

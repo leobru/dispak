@@ -2379,13 +2379,122 @@ e61(void)
 	return E_SUCCESS;
 }
 
+static struct {
+	int     armed;
+	ushort  addr;
+	ushort  cont;
+	int     print_info;
+} debug_m34;
+
+static struct {
+	int     armed;
+	ushort  addr;
+	ushort  cont;
+	int     print_info;
+	int     mode;
+} debug_m35;
+
+static int debug_watch_suppressed;
+static ushort debug_prev_abort;
+
+static int
+debug_fire(ushort cont, int print_info)
+{
+	debug_watch_suppressed = 1;
+	if (print_info)
+		where();
+	debug_prev_abort = cont;
+	JMP(cont);
+	debug_watch_suppressed = 0;
+	return 1;
+}
+
+int
+debug_check_fetch(ushort addr)
+{
+	if (debug_watch_suppressed)
+		return 0;
+	if (debug_m34.armed && debug_m34.addr == ADDR(addr)) {
+		ushort cont = debug_m34.cont;
+		int print_info = debug_m34.print_info;
+
+		debug_m34.armed = 0;
+		return debug_fire(cont, print_info);
+	}
+	return 0;
+}
+
+int
+debug_check_read(ushort addr)
+{
+	if (debug_watch_suppressed)
+		return 0;
+	if (debug_m35.armed && debug_m35.mode == 2 &&
+			debug_m35.addr == ADDR(addr)) {
+		ushort cont = debug_m35.cont;
+		int print_info = debug_m35.print_info;
+
+		debug_m35.armed = 0;
+		return debug_fire(cont, print_info);
+	}
+	return 0;
+}
+
+int
+debug_check_write(ushort addr)
+{
+	if (debug_watch_suppressed)
+		return 0;
+	if (debug_m35.armed && debug_m35.mode == 1 &&
+			debug_m35.addr == ADDR(addr)) {
+		ushort cont = debug_m35.cont;
+		int print_info = debug_m35.print_info;
+
+		debug_m35.armed = 0;
+		return debug_fire(cont, print_info);
+	}
+	return 0;
+}
+
 int
 deb(void)
 {
 	alureg_t        r;
+	uint64_t        w;
+	ushort          xfer, watch, cont;
+	int             print_info, mode;
 
 	LOAD(r, reg[016]);
-	JMP(ADDR(r.l));
+	w = ((uint64_t) r.l << 24) | r.r;
+	xfer = (w >> 24) & 077777;
+	print_info = (w >> 23) & 1;
+	mode = (w >> 20) & 3;
+	watch = w & 077777;
+	cont = reg[TRAPRETREG];
+
+	if (!xfer)
+		xfer = debug_prev_abort ? debug_prev_abort : cont;
+
+	switch (mode) {
+	case 0:
+		debug_m34.armed = 1;
+		debug_m34.addr = watch;
+		debug_m34.cont = cont;
+		debug_m34.print_info = print_info;
+		break;
+	case 1:
+	case 2:
+		debug_m35.armed = 1;
+		debug_m35.addr = watch;
+		debug_m35.cont = cont;
+		debug_m35.print_info = print_info;
+		debug_m35.mode = mode;
+		break;
+	default:
+		return E_CWERR;
+	}
+
+	JMP(xfer);
 	return E_SUCCESS;
 }
 

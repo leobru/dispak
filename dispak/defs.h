@@ -454,6 +454,9 @@ int resources (void);
 int eexit (void);
 double fetch_real (int);
 double get_real (alureg_t word);
+int debug_check_fetch (ushort addr);
+int debug_check_read (ushort addr);
+int debug_check_write (ushort addr);
 
 /* debug.y */
 void help (void);
