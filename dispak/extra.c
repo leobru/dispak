@@ -17,6 +17,7 @@
 #include <errno.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <stdlib.h>
 #include "defs.h"
 #include "disk.h"
 #include "iobuf.h"
@@ -1823,8 +1824,11 @@ e50(void)
 		acc.l = 0;
 		if (i == 0)
 			acc.r = 077777;
-		else if (i >= 2048)
+		else if (i >= 2048) {
 			acc.r = disk_emulate_725 ? 0 : 1;
+			accex.l = disk_emulate_725 ? 01744 : 07634;
+			accex.r = 0;
+		}
 		else
 			acc.r = 040;
 		return E_SUCCESS;
@@ -3032,6 +3036,22 @@ int
 physaddr(void)
 {
 	ushort          addr = reg[016];
+	char            nm[24], *e;
+
+	/* Экспериментальное переопределение возврата э65 через окружение:
+	 * E65_<восьмеричный addr>=<восьмеричное 48-битное слово>. Позволяет
+	 * подбирать разряды, которые проверяет задача (архив и др.), не
+	 * перекомпилируя dispak. Пример: E65_2100=100000 (16р ПРЕДЕЛ). */
+	snprintf(nm, sizeof nm, "E65_%o", addr);
+	if ((e = getenv(nm)) != NULL) {
+		unsigned long long v = strtoull(e, NULL, 8);
+		acc.l = (v >> 24) & 077777777;
+		acc.r = v & 077777777;
+		if (getenv("E65_TRACE"))
+			fprintf(stderr, "E65 %o -> %08o %08o\n",
+				addr, acc.l, acc.r);
+		return E_SUCCESS;
+	}
 
 	switch (addr) {                 /* GUS  */
 	case 0:

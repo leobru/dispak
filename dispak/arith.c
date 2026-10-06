@@ -21,7 +21,6 @@ get_real (alureg_t word)
         return ldexp(mantissa, exponent - 63);
 }
 
-#define ABS(x) ((x) < 0 ? -x : x)
 #define BESM_TO_INT64(from,to) {\
 	to = from.mr | (uint64_t)from.ml << 24;\
         if (from.ml & 0x10000) to |= -1ull << 40;\
@@ -171,43 +170,113 @@ aox()
 }
 
 /*
- * non-restoring division
+ * Division of mantissas as done by the BESM-6 arithmetic unit (Technical
+ * description ИЫ1 700 000 ТО-3, part IV, section 4.16, sheets 86-102).
+ * Non-restoring division with the remainder kept in carry-save form (sums
+ * and carries); only bits 41-39 are resolved (РСУД, РПУД, РУД).  Each step
+ * subtracts the divisor, adds it or only shifts, chosen by those bits and
+ * the previous action (table 4.4).  The quotient is accumulated as positive
+ * (РОМ) and negative (ВРУ) components of 42 bits (41 + an extra rounding
+ * bit); the result is РОМ - ВРУ with the special rounding of sheet 102,
+ * which makes exact divisions exact.
+ *
+ * Mantissas are 42-bit two's complement (two sign bits), the divisor is
+ * normalized.  Returns the 42-bit quotient, |q| <= 2.  Reference model and
+ * details: besm6/simh BESM6/tools/b6div.py and BESM6/doc/division.md.
  */
-uint64_t
-nrdiv (int64_t nn, int64_t dd, int * expdiff)
+#define BITS42  ((1ull << 42) - 1)
+#define DBIT(x,n) ((int) ((x) >> ((n)-1)) & 1)
+static uint64_t
+au_divide (uint64_t x, uint64_t y)
 {
-	int64_t res = 0;
-	int64_t q = 1LL << 40;
-	nn *= 2;
-	dd *= 2;
-	if (ABS(nn) >= ABS(dd))
-		nn/=2, (*expdiff)++;
+	const uint64_t lo = (1ull << 38) - 1;   /* carry-save part: bits 38..1 */
+	const uint64_t lo39 = (1ull << 39) - 1;
+	int yneg = DBIT(y, 41);
+	uint64_t s2, c2, yv, sm, cr, pos, neg, lo_s, lo_c;
+	int sud, pud, rud, zu_plus, act, i, a, b, t39, t40;
+	int pe, ne, p1, n1, dpr, r1;
 
-        if (dd == 1ll << 40)
-            return nn;          /* dividing by a power of 2 */
+	/* Remainder R0 = X/2: bits 41-39 on РСУД, the rest single-row.
+	 * s2/c2 hold the carry-save code already shifted left (bits 39..1);
+	 * at the first step it is X itself, its lowest bit not lost. */
+	s2 = x & lo39;
+	c2 = 0;
+	sud = DBIT(x, 42) << 2 | DBIT(x, 41) << 1 | DBIT(x, 40);
+	pud = 0;
+	rud = DBIT(x, 41) << 1 | DBIT(x, 40);	/* bits 40,39 of remainder */
+	zu_plus = !DBIT(x, 41) && yneg;		/* sheet 100 */
+	pos = neg = 0;
 
-	while (q > 1) {
-		if (nn == 0)
-			break;
+	for (i = 0; i < 42; i++) {
+		/* Table 4.4: first sign 0 repeats the previous action;
+		 * otherwise the sign is the carry out of resolved bits 40,39;
+		 * code I,II means unknown sign, shift only. */
+		if (! (sud & 4))
+			act = zu_plus ? '+' : '-';
+		else if ((sud & 3) + pud == 3)
+			act = 's';
+		else
+			act = (((sud & 3) + pud >= 4) != yneg) ? '-' : '+';
+		zu_plus = (act == '+');
+		pos = pos << 1 | (act == '-');
+		neg = neg << 1 | (act == '+');
 
-		if (ABS(nn) < (1LL << 39)) {
-			nn *= 2;	/* magic shortcut */
-		} else if ((nn > 0) ^ (dd > 0)) {
-			res -= q;
-			nn = 2*nn+dd;
+		if (act == 's') {
+			/* Shift only: РСУД 41,40 = 1, bit 39 of the
+			 * carry-save code summed without the divisor, carry
+			 * to РПУД40 (sheet 98).  Bit 38 (carry to РПУД39, as
+			 * in the scheme of sheet 99) is not in sheet 98: it
+			 * was fitted to the Диспак constant Е'Е-10'. */
+			a = DBIT(s2, 39);
+			b = DBIT(c2, 39);
+			sud = 6 | (a ^ b);
+			pud = (a & b) << 1;
+			a = DBIT(s2, 38);
+			b = DBIT(c2, 38);
+			pud |= a & b;
+			lo_s = (s2 & (lo >> 1)) | (uint64_t) (a ^ b) << 37;
+			lo_c = c2 & (lo >> 1);
 		} else {
-			res += q;
-			nn = 2*nn-dd;
+			/* +ЧВР: divisor as is; -ЧВР: inverted and 1 to bit 1 */
+			yv = (act == '+') ? y : ~y & BITS42;
+			sm = s2 ^ c2 ^ (yv & lo39);
+			cr = ((s2 & c2) | (s2 & yv & lo39) |
+				(c2 & yv & lo39)) << 1;
+			if (act == '-')
+				cr |= 1;
+			/* Sum bit 39 to РСУД, carries from 39 and 38 to
+			 * РПУД; bits 41,40 are shifted РУД plus divisor. */
+			t39 = rud & 1;
+			t40 = rud >> 1;
+			sud = (t40 ^ DBIT(yv, 41) ^ (t39 & DBIT(yv, 40))) << 2 |
+				(t39 ^ DBIT(yv, 40)) << 1 | DBIT(sm, 39);
+			pud = DBIT(cr, 40) << 1 | DBIT(cr, 39);
+			lo_s = sm & lo;
+			lo_c = cr & lo;
 		}
-		q /= 2;
+		/* РУД: resolved bits 40,39 of the new remainder */
+		rud = ((sud & 3) + pud) & 3;
+		s2 = lo_s << 1;
+		c2 = lo_c << 1;
 	}
-	return res / 2;
+
+	/* Quotient = РОМ + inverted ВРУ + ДПР, plus rounding 1 to 1рРС2 */
+	pe = pos & 1;
+	ne = neg & 1;
+	pos >>= 1;
+	neg >>= 1;
+	p1 = pos & 1;
+	n1 = neg & 1;
+	dpr = pe || (!ne && !pe) || (!p1 && ne && !n1);
+	r1 = pe && (n1 || p1);
+	return (pos + (~neg & BITS42) + dpr + r1) & BITS42;
 }
 
 int
 b6div()
 {
-	int64_t         dividend, divisor, quotient;
+	int64_t         dividend, divisor;
+	uint64_t        quotient;
 	int expdiff;
 	accex.o = accex.ml = accex.mr = 0;
 	if ((enreg.ml & 0x18000) == 0 || (enreg.ml & 0x18000) == 0x18000)
@@ -222,13 +291,18 @@ qzero:
 	BESM_TO_INT64(enreg, divisor);
 
 	expdiff = acc.o - enreg.o;
-	quotient = nrdiv(dividend, divisor, &expdiff);
+	quotient = au_divide(dividend & BITS42, divisor & BITS42);
+	if (((quotient >> 1) ^ quotient) & (1ull << 40)) {
+		/* normalize right, no rounding */
+		quotient = quotient >> 1 | (quotient & (1ull << 41));
+		expdiff++;
+	}
 
 	if (expdiff < -64)
 		goto qzero;
 	acc.o = (expdiff+64) & 0x7f;
-        acc.ml = quotient >> 24;
-        acc.mr = quotient & 0xffffff;
+	acc.ml = (quotient >> 24) & 0x3ffff;
+	acc.mr = quotient & 0xffffff;
 	if ((expdiff > 63) && !dis_exc)
 		return E_OVFL;
 	return E_SUCCESS;
